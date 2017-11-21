@@ -67,6 +67,7 @@ module RuboCop
       #
       # @param [Parser::Source::Range] range
       def remove(range)
+        range = check_range(range, __method__)
         @source_rewriter.remove(range)
       end
 
@@ -75,6 +76,7 @@ module RuboCop
       # @param [Parser::Source::Range] range
       # @param [String] content
       def insert_before(range, content)
+        range = check_range(range, __method__)
         @source_rewriter.insert_before(range, content)
       end
 
@@ -83,6 +85,7 @@ module RuboCop
       # @param [Parser::Source::Range] range
       # @param [String] content
       def insert_after(range, content)
+        range = check_range(range, __method__)
         @source_rewriter.insert_after(range, content)
       end
 
@@ -91,6 +94,7 @@ module RuboCop
       # @param [Parser::Source::Range] range
       # @param [String] content
       def replace(range, content)
+        range = check_range(range, __method__)
         @source_rewriter.replace(range, content)
       end
 
@@ -102,6 +106,7 @@ module RuboCop
         to_remove = Parser::Source::Range.new(range.source_buffer,
                                               range.begin_pos - size,
                                               range.begin_pos)
+        to_remove = check_range(to_remove, __method__)
         @source_rewriter.remove(to_remove)
       end
 
@@ -115,6 +120,7 @@ module RuboCop
         to_remove = Parser::Source::Range.new(range.source_buffer,
                                               range.begin_pos,
                                               range.begin_pos + size)
+        to_remove = check_range(to_remove, __method__)
         @source_rewriter.remove(to_remove)
       end
 
@@ -128,7 +134,22 @@ module RuboCop
         to_remove = Parser::Source::Range.new(range.source_buffer,
                                               range.end_pos - size,
                                               range.end_pos)
+        to_remove = check_range(to_remove, __method__)
         @source_rewriter.remove(to_remove)
+      end
+
+      private
+      def check_range(range, method)
+        if range.end_pos > (max = @source_rewriter.source_buffer.source.size)
+          warn ["Corrector##{method} given out of bound range end (#{range.end_pos} for ",
+                "while buffer's size is #{max}). ",
+                "Autocorrecting to buffer's size",
+                "\nCaller: #{caller(2,1)[0]}."].join
+          range = Parser::Source::Range.new(range.source_buffer,
+                                            range.begin_pos,
+                                            max)
+        end
+        range
       end
     end
   end
