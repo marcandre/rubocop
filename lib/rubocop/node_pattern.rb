@@ -164,7 +164,6 @@ module RuboCop
         #   CUR_NODE: Ruby code that evaluates to an AST node
         #   CUR_ELEMENT: Either the node or the type if in first element of
         #   a sequence (aka seq_head, e.g. "(seq_head first_node_arg ...")
-
         token = tokens.shift
         case token
         when '('       then compile_seq
@@ -189,68 +188,104 @@ module RuboCop
       def compile_seq
         fail_due_to('empty parentheses') if tokens.first == ')'
 
-        terms = compile_seq_terms
-        terms.unshift(compile_guard_clause)
-        terms.join(" &&\n") << SEQ_HEAD_GUARD
+        Sequence.new(self) do |seq|
+          until tokens.first == ')'
+            if (var = variadic_seq_term)
+              seq.add_variadic_block(var)
+            else
+              seq.add_term(compile_expr)
+            end
+          end
+          tokens.shift
+        end.compile
       end
 
       def compile_guard_clause
         "#{CUR_NODE}.is_a?(RuboCop::AST::Node)"
       end
 
-      def compile_seq_terms
-        ret =
-          compile_seq_terms_with_size do |token, terms, index|
-            capture = next_capture if token == CAPTURED_REST
-            if capture || token == REST
-              index = 0 if index == SEQ_HEAD_INDEX # Consider ($...) as (_ $...)
-              return compile_ellipsis(terms, index, capture)
-            end
+      def variadic_seq_term
+        token = tokens.shift
+        case token
+        when CAPTURED_REST then compile_captured_ellipsis
+        when REST          then compile_ellipsis
+        else                    tokens.unshift(token) && nil
+        end
+      end
+
+      # @private
+      # Builds Ruby code for a sequence
+      # (head *first_terms variadic_term *last_terms)
+      class Sequence < SimpleDelegator
+        def initialize(compiler)
+          @add_to = @first_terms = []
+          @last_terms = []
+          @head = nil
+          @variadic_block = nil
+          super(compiler)
+          yield self if block_given?
+        end
+
+        def add_variadic_block(block)
+          if @variadic_block
+            fail_due_to 'multiple variable patterns in same sequence'
           end
-        ret << "#{CUR_NODE}.children.size == #{ret.size - 1}"
-      end
-
-      def compile_seq_terms_with_size
-        index = SEQ_HEAD_INDEX
-        terms = []
-        until tokens.first == ')'
-          yield tokens.first, terms, index
-          term = compile_expr_with_index(index)
-          index += 1
-          terms << term
+          @variadic_block = block
+          @add_to = @last_terms
         end
 
-        tokens.shift # drop concluding )
-        terms
-      end
+        def add_term(term)
+          @add_to << term
+          @head ||= @first_terms.shift # rubocop:disable Naming/MemoizedInstanceVariableName, Metrics/LineLength
+        end
 
-      def compile_expr_with_index(index)
-        if index == SEQ_HEAD_INDEX
-          with_seq_head_context(compile_expr)
-        else
-          with_child_context(compile_expr, index)
+        def compile
+          [
+            compile_guard_clause,
+            compile_child_nb_guard,
+            compile_seq_head,
+            *compile_terms(@first_terms, 0),
+            compile_variadic_term,
+            *compile_terms(@last_terms, -@last_terms.size)
+          ].compact.join(" &&\n") << SEQ_HEAD_GUARD
+        end
+
+        private
+
+        def compile_child_nb_guard
+          min = @first_terms.size + @last_terms.size
+          "#{CUR_NODE}.children.size #{@variadic_block ? '>' : '='}= #{min}"
+        end
+
+        def compile_seq_head
+          with_seq_head_context(@head) if @head
+        end
+
+        def compile_terms(terms, start)
+          terms.map.with_index { |term, i| with_child_context(term, start + i) }
+        end
+
+        def compile_variadic_term
+          return unless @variadic_block
+
+          first = @head ? @first_terms.size : SEQ_HEAD_INDEX
+
+          @variadic_block.call(first..-@last_terms.size - 1)
         end
       end
+      private_constant :Sequence
 
-      def compile_ellipsis(terms, index, capture = nil)
-        tokens.shift # drop ellipsis
-        tail = compile_seq_tail
-        terms << "#{CUR_NODE}.children.size >= #{index + tail.size}"
-        terms.concat tail
-        if capture
-          range = index..-tail.size - 1
-          terms << "(#{capture} = #{CUR_NODE}.children[#{range}])"
-        end
-        terms
+      def compile_captured_ellipsis
+        capture = next_capture
+        lambda { |range|
+          # Consider ($...) like (_ $...):
+          range = 0..range.end if range.begin == SEQ_HEAD_INDEX
+          "(#{capture} = #{CUR_NODE}.children[#{range}])"
+        }
       end
 
-      def compile_seq_tail
-        terms = []
-        terms << compile_expr until tokens.first == ')'
-        tokens.shift # drop ')'
-        terms.map.with_index do |term, i|
-          with_child_context(term, i - terms.size)
-        end
+      def compile_ellipsis
+        ->(_child_range) { 'true' }
       end
 
       def compile_union

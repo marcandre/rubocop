@@ -711,6 +711,14 @@ RSpec.describe RuboCop::NodePattern do
 
       it_behaves_like 'single capture'
     end
+
+    context 'after a child' do
+      let(:pattern) { '(send (int 10) $...)' }
+      let(:ruby) { '10 * 1' }
+      let(:captured_val) { [:*, s(:int, 1)] }
+
+      it_behaves_like 'single capture'
+    end
   end
 
   describe 'captures within sets' do
