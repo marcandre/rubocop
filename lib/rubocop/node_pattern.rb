@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'erb'
+
 # rubocop:disable Metrics/ClassLength, Metrics/CyclomaticComplexity
 module RuboCop
   # This class performs a pattern-matching operation on an AST node.
@@ -214,6 +216,7 @@ module RuboCop
         case token
         when CAPTURED_REST then compile_captured_ellipsis
         when REST          then compile_ellipsis
+        when '<'           then compile_any_child
         else                    tokens.unshift(token) && nil
         end
       end
@@ -291,6 +294,28 @@ module RuboCop
 
       def compile_ellipsis
         ->(_child_range) { 'true' }
+      end
+
+      ANY_CHILD_TEMPLATE = ERB.new <<~RUBY.freeze
+          CUR_NODE.children[<%= range %>].each_with_object({}) { |<%= child_node %>, matched|
+             hit = case
+             <% patterns.each_with_index do |pattern, i| %>
+             when <%= pattern %> then <%= i %>
+             <% end %>
+             else next
+             end
+             matched[hit] = true
+          }.size == <%= patterns.size %>
+        RUBY
+
+      def compile_any_child
+        child_node = 'child'
+        patterns = tokens_until('>', 'any child').map do
+          with_context(compile_expr, child_node, use_temp_node: false)
+        end
+        with_temp_variable do |matched|
+          lambda { |range| ANY_CHILD_TEMPLATE.result(binding) }
+        end
       end
 
       def insure_same_captures(enum, what)
