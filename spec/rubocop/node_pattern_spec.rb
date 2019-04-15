@@ -456,7 +456,7 @@ RSpec.describe RuboCop::NodePattern do
     end
   end
 
-  describe 'sets' do
+  describe 'unions' do
     context 'at the top level' do
       context 'containing symbol literals' do
         context 'when the AST has a matching symbol' do
@@ -721,7 +721,7 @@ RSpec.describe RuboCop::NodePattern do
     end
   end
 
-  describe 'captures within sets' do
+  describe 'captures within union' do
     context 'on simple subpatterns' do
       let(:pattern) { '{$send $int $float}' }
       let(:ruby) { '2.0' }
@@ -1288,6 +1288,18 @@ RSpec.describe RuboCop::NodePattern do
   describe 'bad syntax' do
     context 'with empty parentheses' do
       let(:pattern) { '()' }
+
+      it_behaves_like 'invalid'
+    end
+
+    context 'with empty union' do
+      let(:pattern) { '{}' }
+
+      it_behaves_like 'invalid'
+    end
+
+    context 'with empty intersection' do
+      let(:pattern) { '[]' }
 
       it_behaves_like 'invalid'
     end

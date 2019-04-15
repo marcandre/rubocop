@@ -185,18 +185,23 @@ module RuboCop
       end
       # rubocop:enable Metrics/MethodLength, Metrics/AbcSize
 
-      def compile_seq
-        fail_due_to('empty parentheses') if tokens.first == ')'
+      def tokens_until(stop, what)
+        return to_enum __method__, stop, what unless block_given?
 
+        fail_due_to("empty #{what}") if tokens.first == stop && what
+        yield until tokens.first == stop
+        tokens.shift
+      end
+
+      def compile_seq
         Sequence.new(self) do |seq|
-          until tokens.first == ')'
+          tokens_until ')', 'sequence' do
             if (var = variadic_seq_term)
               seq.add_variadic_block(var)
             else
               seq.add_term(compile_expr)
             end
           end
-          tokens.shift
         end.compile
       end
 
@@ -288,54 +293,37 @@ module RuboCop
         ->(_child_range) { 'true' }
       end
 
-      def compile_union
-        fail_due_to('empty union') if tokens.first == '}'
+      def insure_same_captures(enum, what)
+        return to_enum __method__, enum, what unless block_given?
 
-        union = union_terms.join(' || ')
-        "(#{union})"
+        captures_before = captures_after = nil
+        enum.each do
+          captures_before ||= @captures
+          @captures = captures_before
+          yield
+          captures_after ||= @captures
+          if captures_after != @captures
+            fail_due_to("each #{what} must have same # of captures")
+          end
+        end
       end
 
-      def union_terms
+      def compile_union
         # we need to ensure that each branch of the {} contains the same
         # number of captures (since only one branch of the {} can actually
         # match, the same variables are used to hold the captures for each
         # branch)
-        compile_expr_with_captures do |term, before, after|
-          terms = [term]
-          until tokens.first == '}'
-            terms << compile_expr_with_capture_check(before, after)
-          end
-          tokens.shift
+        enum = tokens_until('}', 'union')
+        terms = insure_same_captures(enum, 'branch of {}')
+                .map { compile_expr }
 
-          terms
-        end
-      end
-
-      def compile_expr_with_captures
-        captures_before = @captures
-        expr = compile_expr
-
-        yield expr, captures_before, @captures
-      end
-
-      def compile_expr_with_capture_check(before, after)
-        @captures = before
-        expr = compile_expr
-        if @captures != after
-          fail_due_to('each branch of {} must have same # of captures')
-        end
-
-        expr
+        "(#{terms.join(' || ')})"
       end
 
       def compile_intersect
-        fail_due_to('empty intersection') if tokens.first == ']'
-
-        terms = []
-        terms << compile_expr until tokens.first == ']'
-        tokens.shift
-
-        terms.join(' && ')
+        tokens_until(']', 'intersection')
+          .map { compile_expr }
+          .join(' && ')
       end
 
       def compile_capture
