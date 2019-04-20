@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'erb'
+
 # rubocop:disable Metrics/ClassLength, Metrics/CyclomaticComplexity
 module RuboCop
   # This class performs a pattern-matching operation on an AST node.
@@ -38,6 +40,12 @@ module RuboCop
   #     '$(send const ...)' # arbitrary matching can be performed on a capture
   #     '(send _recv _msg)' # wildcards can be named (for readability)
   #     '(send ... :new)'   # you can match against the last children
+  #     '(array <str sym>)' # you can match children in any order. This
+  #                         # would match `['x', :y]` as well as `[:y, 'x']
+  #     '(_ <str sym ...>)' # will match if arguments have at least a `str` and
+  #                         # a `sym` node, but can have more.
+  #     '(array <$str $_>)' # captures are in the order of the pattern, irrespective
+  #                         # of the actual order of the children
   #     '(send $...)'       # capture all the children as an array
   #     '(send $... int)'   # capture all children but the last as an array
   #     '(send _x :+ _x)'   # unification is performed on named wildcards
@@ -147,6 +155,7 @@ module RuboCop
         @tokens = Compiler.tokens(@string)
 
         @match_code = with_context(compile_expr, node_var, use_temp_node: false)
+        @match_code = "(captures = Array.new(#{@captures})) && #{@match_code}" if @captures > 0
 
         fail_due_to('unbalanced pattern') unless tokens.empty?
       end
@@ -206,6 +215,7 @@ module RuboCop
         case token
         when CAPTURED_REST then compile_captured_ellipsis
         when REST          then compile_ellipsis
+        when '<'           then compile_any_order
         else                    [1, compile_expr(token)]
         end
       end
@@ -261,14 +271,19 @@ module RuboCop
           "#{CUR_NODE}.children.size #{@variadic_index ? '>' : '='}= #{min}"
         end
 
-        def term(index, arg)
-          r = @terms[index]
-          r = r.call(arg) if r.respond_to? :call
-          r
+        def term(index, range)
+          t = @terms[index]
+          if t.respond_to? :call
+            t.call(range)
+          else
+            with_child_context(t, range.begin)
+          end
         end
 
         def compile_seq_head
-          with_seq_head_context(term(0, SEQ_HEAD_INDEX)) if seq_head?
+          return unless seq_head?
+          fail_due_to 'sequences can not start with <' if @terms[0].respond_to? :call
+          with_seq_head_context(@terms[0])
         end
 
         def compile_first_terms
@@ -283,7 +298,7 @@ module RuboCop
           index_range.map do |i|
             current = start
             start += @arities.fetch(i)
-            with_child_context(term(i, current), current)
+            term(i, current..start-1)
           end
         end
 
@@ -312,6 +327,41 @@ module RuboCop
 
       def compile_ellipsis
         [0..Float::INFINITY, 'true']
+      end
+
+      line = __LINE__
+      ANY_ORDER_TEMPLATE = ERB.new <<~RUBY.gsub("%>\n", '%>').freeze
+          <% if capture_rest %>(<%= capture_rest %> = []) && <% end %>
+          <%= CUR_NODE %>.children[<%= range %>].each_with_object({}) { |child, matched|
+            case
+            <% patterns.each_with_index do |pattern, i| %>
+            when !matched[<%= i %>] && <%=
+              with_context(pattern, 'child', use_temp_node: false)
+            %> then matched[<%= i %>] = true
+            <% end %>
+            <% if !rest %>  else break({})
+            <% elsif capture_rest %>  else <%= capture_rest %> << child
+            <% end %>
+            end
+          }.size == <%= patterns.size %>
+        RUBY
+      ANY_ORDER_TEMPLATE.location = [__FILE__, line + 1]
+
+      def compile_any_order
+        rest = capture_rest = nil
+        patterns = []
+        tokens_until('>', 'any child').each do
+          fail_due_to 'ellipsis must be at the end of <>' if rest
+          token = tokens.shift
+          case token
+            when CAPTURED_REST then rest = capture_rest = next_capture
+            when REST          then rest = true
+            else                    patterns << compile_expr(token)
+          end
+        end
+        [ rest ? patterns.size .. Float::INFINITY : patterns.size,
+          lambda { |range| ANY_ORDER_TEMPLATE.result(binding) }
+        ]
       end
 
       def insure_same_captures(enum, what)
@@ -435,7 +485,9 @@ module RuboCop
       end
 
       def next_capture
-        "capture#{@captures += 1}"
+        index = @captures
+        @captures += 1
+        "captures[#{index}]"
       end
 
       def get_param(number)
@@ -444,17 +496,13 @@ module RuboCop
         number.zero? ? @root : "param#{number}"
       end
 
-      def emit_capture_list
-        (1..@captures).map { |n| "capture#{n}" }.join(',')
-      end
-
       def emit_retval
         if @captures.zero?
           'true'
         elsif @captures == 1
-          'capture1'
+          'captures[0]'
         else
-          "[#{emit_capture_list}]"
+          "captures"
         end
       end
 
@@ -470,7 +518,7 @@ module RuboCop
       def emit_method_code
         <<-RUBY
           return unless #{@match_code}
-          block_given? ? yield(#{emit_capture_list}) : (return #{emit_retval})
+          block_given? ? yield(*captures) : (return #{emit_retval})
         RUBY
       end
 
@@ -581,7 +629,7 @@ module RuboCop
       end
 
       def node_search_all(method_name, compiler, called_from)
-        yieldval = compiler.emit_capture_list
+        yieldval = '*captures'
         yieldval = 'node' if yieldval.empty?
         prelude = "return enum_for(:#{method_name}, node0" \
                   "#{compiler.emit_trailing_params}) unless block_given?"

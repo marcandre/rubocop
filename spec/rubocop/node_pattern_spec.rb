@@ -1285,6 +1285,58 @@ RSpec.describe RuboCop::NodePattern do
     end
   end
 
+  describe 'in any order' do
+    let(:ruby) { '[:hello, "world", 1, 2, 3]' }
+
+    context 'without ellipsis' do
+      context 'with matching children' do
+        let(:pattern) { '(array <(str $_) (int 1) (int 3) (int $_) $_>)' }
+
+        let(:captured_vals) { ['world', 2, s(:sym, :hello)] }
+
+        it_behaves_like 'multiple capture'
+      end
+
+      context 'with too many children' do
+        let(:pattern) { '(array <(str $_) (int 1) (int 3) (int $_)>)' }
+
+        it_behaves_like 'nonmatching'
+      end
+
+      context 'with too few children' do
+        let(:pattern) { '(array <(str $_) (int 1) (int 3) (int $_) _ _>)' }
+
+        it_behaves_like 'nonmatching'
+      end
+
+      context 'followed by second <>' do
+        let(:pattern) { '(array <(str $_) (sym $_)> $_ <(int 3) (int $_)>)' }
+
+        let(:captured_vals) { ['world', :hello, s(:int, 1), 2] }
+
+        it_behaves_like 'multiple capture'
+      end
+
+      context 'separated from a second <> by an ellipsis' do
+        let(:pattern) { '(array <(str $_) (sym $_)> $... <(int 3) (int $_)>)' }
+
+        let(:captured_vals) { ['world', :hello, [s(:int, 1)], 2] }
+
+        it_behaves_like 'multiple capture'
+      end
+    end
+
+    context 'with a captured ellipsis' do
+      context 'matching non sequential children' do
+        let(:pattern) { '(array <(str "world") (int 2) $...>)' }
+
+        let(:captured_val) { [s(:sym, :hello), s(:int, 1), s(:int, 3)] }
+
+        it_behaves_like 'single capture'
+      end
+    end
+  end
+
   describe 'bad syntax' do
     context 'with empty parentheses' do
       let(:pattern) { '()' }
