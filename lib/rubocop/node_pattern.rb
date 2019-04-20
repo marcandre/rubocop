@@ -152,7 +152,7 @@ module RuboCop
       end
 
       # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
-      def compile_expr
+      def compile_expr(token = tokens.shift)
         # read a single pattern-matching expression from the token stream,
         # return Ruby code which performs the corresponding matching operation
         #
@@ -164,7 +164,6 @@ module RuboCop
         #   CUR_NODE: Ruby code that evaluates to an AST node
         #   CUR_ELEMENT: Either the node or the type if in first element of
         #   a sequence (aka seq_head, e.g. "(seq_head first_node_arg ...")
-        token = tokens.shift
         case token
         when '('       then compile_seq
         when '{'       then compile_union
@@ -194,15 +193,8 @@ module RuboCop
       end
 
       def compile_seq
-        Sequence.new(self) do |seq|
-          tokens_until ')', 'sequence' do
-            if (var = variadic_seq_term)
-              seq.add_variadic_block(var)
-            else
-              seq.add_term(compile_expr)
-            end
-          end
-        end.compile
+        terms = tokens_until(')', 'sequence').map { variadic_seq_term }
+        Sequence.new(self, *terms).compile
       end
 
       def compile_guard_clause
@@ -214,7 +206,7 @@ module RuboCop
         case token
         when CAPTURED_REST then compile_captured_ellipsis
         when REST          then compile_ellipsis
-        else                    tokens.unshift(token) && nil
+        else                    [1, compile_expr(token)]
         end
       end
 
@@ -222,26 +214,13 @@ module RuboCop
       # Builds Ruby code for a sequence
       # (head *first_terms variadic_term *last_terms)
       class Sequence < SimpleDelegator
-        def initialize(compiler)
-          @add_to = @first_terms = []
-          @last_terms = []
-          @head = nil
-          @variadic_block = nil
+        def initialize(compiler, *arity_term_list)
+          @arities, @terms = arity_term_list.transpose
+
           super(compiler)
-          yield self if block_given?
-        end
-
-        def add_variadic_block(block)
-          if @variadic_block
-            fail_due_to 'multiple variable patterns in same sequence'
-          end
-          @variadic_block = block
-          @add_to = @last_terms
-        end
-
-        def add_term(term)
-          @add_to << term
-          @head ||= @first_terms.shift # rubocop:disable Naming/MemoizedInstanceVariableName, Metrics/LineLength
+          @variadic_index = @arities.find_index { |a| a.is_a?(Range) }
+          fail_due_to 'multiple variable patterns in same sequence' \
+            if @variadic_index && !@arities.one?(Range)
         end
 
         def compile
@@ -249,48 +228,90 @@ module RuboCop
             compile_guard_clause,
             compile_child_nb_guard,
             compile_seq_head,
-            *compile_terms(@first_terms, 0),
+            *compile_first_terms,
             compile_variadic_term,
-            *compile_terms(@last_terms, -@last_terms.size)
+            *compile_last_terms
           ].compact.join(" &&\n") << SEQ_HEAD_GUARD
         end
 
         private
 
+        def first_terms_arity
+          first_terms_range { |r| @arities[r].sum } || 0
+        end
+
+        def last_terms_arity
+          last_terms_range { |r| @arities[r].sum } || 0
+        end
+
+        def first_terms_range
+          yield 1..(@variadic_index || @terms.size) - 1 if seq_head?
+        end
+
+        def last_terms_range
+          yield @variadic_index + 1...@terms.size if @variadic_index
+        end
+
+        def seq_head?
+          @variadic_index != 0
+        end
+
         def compile_child_nb_guard
-          min = @first_terms.size + @last_terms.size
-          "#{CUR_NODE}.children.size #{@variadic_block ? '>' : '='}= #{min}"
+          min = first_terms_arity + last_terms_arity
+          "#{CUR_NODE}.children.size #{@variadic_index ? '>' : '='}= #{min}"
+        end
+
+        def term(index, arg)
+          r = @terms[index]
+          r = r.call(arg) if r.respond_to? :call
+          r
         end
 
         def compile_seq_head
-          with_seq_head_context(@head) if @head
+          with_seq_head_context(term(0, SEQ_HEAD_INDEX)) if seq_head?
         end
 
-        def compile_terms(terms, start)
-          terms.map.with_index { |term, i| with_child_context(term, start + i) }
+        def compile_first_terms
+          first_terms_range { |range| compile_terms(range, 0) }
+        end
+
+        def compile_last_terms
+          last_terms_range { |r| compile_terms(r, -last_terms_arity) }
+        end
+
+        def compile_terms(index_range, start)
+          index_range.map do |i|
+            current = start
+            start += @arities.fetch(i)
+            with_child_context(term(i, current), current)
+          end
         end
 
         def compile_variadic_term
-          return unless @variadic_block
+          variadic_arity { |arity| term(@variadic_index, arity) }
+        end
 
-          first = @head ? @first_terms.size : SEQ_HEAD_INDEX
+        def variadic_arity
+          return unless @variadic_index
 
-          @variadic_block.call(first..-@last_terms.size - 1)
+          first = @variadic_index > 0 ? first_terms_arity : SEQ_HEAD_INDEX
+          yield first..-last_terms_arity - 1
         end
       end
       private_constant :Sequence
 
       def compile_captured_ellipsis
         capture = next_capture
-        lambda { |range|
+        block = lambda { |range|
           # Consider ($...) like (_ $...):
           range = 0..range.end if range.begin == SEQ_HEAD_INDEX
           "(#{capture} = #{CUR_NODE}.children[#{range}])"
         }
+        [0..Float::INFINITY, block]
       end
 
       def compile_ellipsis
-        ->(_child_range) { 'true' }
+        [0..Float::INFINITY, 'true']
       end
 
       def insure_same_captures(enum, what)
