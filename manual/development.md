@@ -172,9 +172,12 @@ the expression achieved previously:
 
 ```ruby
 def_node_matcher :not_empty_call?, <<~PATTERN
-  (send (send (...) :empty?) :!)
+  (send (send $(...) :empty?) :!)
 PATTERN
 ```
+
+Note that we added a `$` sign to capture the "expression" in `!<expression>.empty?`,
+it will become useful later.
 
 Get yourself familiar with the AST node hooks that
 [`parser`](https://www.rubydoc.info/gems/parser/Parser/AST/Processor)
@@ -206,11 +209,11 @@ module RuboCop
       #
       #   # good
       #   array.any?
-      class SimplifyNotEmptyWithAny < Cop
+      class SimplifyNotEmptyWithAny < Base
         MSG = 'Use `.any?` and remove the negation part.'.freeze
 
         def_node_matcher :not_empty_call?, <<~PATTERN
-          (send (send (...) :empty?) :!)
+          (send (send $(...) :empty?) :!)
         PATTERN
 
         def on_send(node)
@@ -227,10 +230,7 @@ end
 Update the spec to cover the expected syntax:
 
 ```ruby
-describe RuboCop::Cop::Style::SimplifyNotEmptyWithAny do
-  let(:config) { RuboCop::Config.new }
-  subject(:cop) { described_class.new(config) }
-
+describe RuboCop::Cop::Style::SimplifyNotEmptyWithAny, :config do
   it 'registers an offense when using `!a.empty?`' do
     expect_offense(<<~RUBY)
       !array.empty?
@@ -250,31 +250,44 @@ end
 ### Auto-correct
 
 The auto-correct can help humans automatically fix offenses that have been detected.
-It's necessary to define an `autocorrect` method that returns a lambda
-[rewriter](https://github.com/whitequark/parser/blob/master/lib/parser/rewriter.rb)
-with the corrector where you can give instructions about what to do with the
+It's necessary to `extend Autocorrector`.
+The method `add_offense` yields a corrector object that is a thin wrapper on
+[parser's TreeRewriter](https://www.rubydoc.info/gems/parser/Parser/Source/TreeRewriter)
+to which you can give instructions about what to do with the
 offensive node.
 
 Let's start with a simple spec to cover it:
 
 ```ruby
-it 'autocorrect `!a.empty?` to `a.any?` ' do
+  it 'corrects `!a.empty?`' do
+    expect_offense(<<~RUBY)
+      !array.empty?
+      ^^^^^^^^^^^^^ Use `.any?` and remove the negation part.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      array.any?
+    RUBY
   expect(autocorrect_source('!a.empty?')).to eq('a.any?')
 end
 ```
 
-And then define the `autocorrect` method on the cop side:
+And then add the autocorrecting block on the cop side:
 
 ```ruby
-def autocorrect(node)
-  lambda do |corrector|
-    internal_expression = node.children[0].children[0].source
-    corrector.replace(node, "#{internal_expression}.any?")
-  end
-end
+        extend Autocorrector
+
+        def on_send(node)
+          expression = not_empty_call?(node)
+          return unless expression
+
+          add_offense(node) do |corrector|
+            corrector.replace(node, "#{expression.source}.any?")
+          end
+        end
 ```
 
-The corrector allows you to `insert_after` and `insert_before` or
+The corrector allows you to `insert_after`, `insert_before`, `wrap` or
 `replace` a specific node or in any specific range of the code.
 
 Range can be determined on `node.location` where it brings specific
@@ -298,14 +311,15 @@ Style/SimplifyNotEmptyWithAny:
 And then on the autocorrect method, you just need to use the `cop_config` it:
 
 ```ruby
-def autocorrect(node)
-  lambda do |corrector|
-    internal_expression = node.children[0].children[0].source
-    replacement = cop_config['ReplaceAnyWith'] || "any?"
-    new_expression = "#{internal_expression}.#{replacement}"
-    corrector.replace(node, new_expression)
-  end
-end
+        def on_send(node)
+          expression = not_empty_call?(node)
+          return unless expression
+
+          add_offense(node) do |corrector|
+            replacement = cop_config['ReplaceAnyWith'] || 'any?'
+            corrector.replace(node, "#{expression.source}.#{replacement}")
+          end
+        end
 ```
 
 ## Documentation

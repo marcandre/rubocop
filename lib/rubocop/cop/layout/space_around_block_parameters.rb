@@ -27,6 +27,7 @@ module RuboCop
       class SpaceAroundBlockParameters < Cop
         include ConfigurableEnforcedStyle
         include RangeHelp
+        extend Autocorrector
 
         def on_block(node)
           arguments = node.arguments
@@ -36,23 +37,6 @@ module RuboCop
           check_inside_pipes(arguments)
           check_after_closing_pipe(arguments) if node.body
           check_each_arg(arguments)
-        end
-
-        # @param target [RuboCop::AST::Node,Parser::Source::Range]
-        def autocorrect(target)
-          lambda do |corrector|
-            if target.is_a?(RuboCop::AST::Node)
-              if target.parent.children.first == target
-                corrector.insert_before(target, ' ')
-              else
-                corrector.insert_after(target, ' ')
-              end
-            elsif /^\s+$/.match?(target.source)
-              corrector.remove(target)
-            else
-              corrector.insert_after(target, ' ')
-            end
-          end
         end
 
         private
@@ -151,7 +135,14 @@ module RuboCop
           return if space_begin_pos != space_end_pos
 
           target = node || range
-          add_offense(target, location: range, message: "Space #{msg} missing.")
+          message = "Space #{msg} missing."
+          add_offense(target, message: message) do |corrector|
+            if node
+              corrector.insert_before(node, ' ')
+            else
+              corrector.insert_after(target, ' ')
+            end
+          end
         end
 
         def check_no_space(space_begin_pos, space_end_pos, msg)
@@ -160,8 +151,10 @@ module RuboCop
           range = range_between(space_begin_pos, space_end_pos)
           return if range.source.include?("\n")
 
-          add_offense(range, location: range,
-                             message: "#{msg} block parameter detected.")
+          message = "#{msg} block parameter detected."
+          add_offense(range, message: message) do |corrector|
+            corrector.remove(range)
+          end
         end
       end
     end

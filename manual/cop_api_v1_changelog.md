@@ -1,0 +1,202 @@
+# Cop API v0 to v1 API changes
+
+## Upgrade guide
+
+Your custom cops should continue to work in v1.
+
+Nevertheless it is suggested that you tweak them to use the v1 API by following the following steps:
+
+1) Your class should inherit from `RuboCop::Cop::Base` instead of `RuboCop::Cop::Cop`.
+
+2) Locate your calls to `add_offense` and make sure that you pass as the first argument either a `AST::Node`, a `::Parser::Source::Comment` or a `::Parser::Source::Range`, and no `location:` named parameter
+
+#### Example:
+
+```ruby
+# Before
+    class MySillyCop < Cop
+      def on_send(node)
+        if node.method_name == :-
+          add_offense(node, location: :selector, message: "Be positive")
+        end
+      end
+    end
+
+# After
+    class MySillyCop < Base
+      def on_send(node)
+        if node.method_name == :-
+          add_offense(node.loc.selector, message: "Be positive")
+        end
+      end
+    end
+```
+
+
+### If your class support autocorrection
+
+Your class must `extend Autocorrector`
+
+The `corrector` is now yielded from `add_offense`. Move the code of your method `autocorrect` in that block and do not wrap your correction in a lambda.
+
+#### Example:
+
+```ruby
+# Before
+    class MySillyCorrectingCop < Cop
+      def on_send(node)
+        if node.method_name == :-
+          add_offense(node, location: :selector, message: 'Be positive')
+        end
+      end
+
+      def autocorrect(node)
+        lambda do |corrector|
+          corrector.replace(node.loc.selector, '+')
+        end
+      end
+    end
+
+# After
+    class MySillyCorrectingCop < Base
+      extend Autocorrector
+
+      def on_send(node)
+        if node.method_name == :-
+          add_offense(node.loc.selector, message: 'Be positive') do |corrector|
+            corrector.replace(node.loc.selector, '+')
+          end
+        end
+      end
+    end
+```
+
+### Upgrading specs
+
+It is highly recommended you use `expect_offense` / `expect_no_offense` in your specs, e.g.:
+
+```ruby
+require 'rubocop/rspec/support'
+
+RSpec.describe RuboCop::Cop::Custom::MySillyCorrectingCop, :config do
+  # No need for `let(:cop)`
+  it 'is positive' do
+    expect_offense(<<~RUBY)
+      42 + 2 - 2
+             ^ Be positive
+    RUBY
+
+    expect_correction(<<~RUBY)
+      42 + 2 + 2
+    RUBY
+  end
+
+  it 'does not register an offense for calls to `despair`' do
+    expect_no_offenses(<<~RUBY)
+      "don't".despair
+    RUBY
+  end
+end
+```
+
+In the unlikely case where you use the class `RuboCop::Cop::Corrector` directly, it has changed a bit but you can ease your transition with `RuboCop::Cop::Legacy::Corrector`  that is meant to be backwards compatible. You will need to `require 'rubocop/cop/legacy/corrector'`
+
+# Detailed API Changes
+
+This section lists all changes (big or small) to the API. It is meant for maintainers of the nuts & bolts of RuboCop; most cop writers will not be impacted by these and are thus not the target audience.
+
+## Base class
+
+*Legacy*: Cops inherit from `Cop::Cop`.
+
+*Current*: Cops inherit from `Cop::Base`. Having a different base class makes the implementation much cleaner and makes it easy to signal which API is being used. `Cop::Cop` inherits from `Cop::Base` and refines some methods for backward compatiblity.
+
+## `add_offense` API
+
+### arguments
+
+*Legacy:* interface allowed for a `node`, with an optional `location` (symbol or range) or a range with a mandatory range as the location. Some cops were abusing the `node` argument and passing very different things.
+
+*Current:* pass a range (or node as a shortcut for `node.loc.expression`), no `location:`. No abuse tolerated.
+
+### de-dupping changes
+
+Both de-dup on `range` and won't process the duplicated offenses at all.
+
+*Legacy:* if offenses on same `node` but different `range`: considered as multiple offenses but a single auto-correct call
+
+*Current:* not applicable and not needed with autocorrection's API
+
+### yield
+
+Both yield under the same conditions (unless cop is disabled for that line), but:
+
+*Legacy:* yields after offense added to `#offenses`
+
+*Current:* yields before offense is added to `#offenses`.
+
+Even the legacy mode yields a corrector, but if a developer uses it an error will be raised asking her to to inherit from `Cop::Base` instead.
+
+## Autocorrection
+
+#### `#autocorrect`
+
+*Legacy:* calls `autocorrect` unless it is disabled / autocorrect is off
+
+*Current:* yields a corrector unless it is disabled. The corrector will be ignored if autocorrecting is off, etc. No support for `autocorrect` method, but a warning is issued if that method is still defined.
+
+### Empty corrections
+
+*Legacy:* `autocorrect` could return `nil` / `false` in cases where it couldn't actually make a correction.
+
+*Current:* No special API. Cases where no corrections are made are automatically detected.
+
+### Correction timing
+
+*Legacy:* the lambda was called only later in the process, and only under specific conditions (if the auto-correct setting is turned on, etc.)
+
+*Current:* correction is built immediately (assuming the cop isn't disabled for the line) and applied later in the process.
+
+### Exception handling
+
+Both: `Commissionner` will rescue all `StandardError`s during analysis (unless `option[:raise_error]`) and store a corresponding `ErrorWithAnalyzedFileLocation` in its error list. This is done when calling the cop's `on_send` & al., or when calling `investigate` / `investigate_post_walk` callback.
+
+*Legacy:* autocorrecting cops were treating errors differently depending on when they occurred. Some errors were silently ignored. Others were rescued as above. Others crashed. Some code in `Team` would rescue errors and add them to the list of errors but I don't think the code worked.
+
+*Current:* `Team` no longer has any special error handling to do as potential exceptions happen when `Commissioner` is running.
+
+### Other error handling
+
+*Legacy:* Clobbering errors are silently ignored. Calling `insert_before` with ranges that extend beyond the source code was silently fixed.
+
+*Current:* Such errors are not ignored. It is still ok that a given Cop's corrections clobber another Cop's, but any given Cop should not issue corrections that clobber each other, or with invalid ranges, otherwise these will be listed in the processing errors.
+
+
+### `#corrections`
+
+*Legacy:* Corrections were held in `#corrections` an array of lambdas. A proxy was written to maintain compatibility with `cop.corrections << ...`, `cop.corrections.concat ...`, etc.
+
+*Current:* Corrections are held in `current_corrector`, a `Corrector` which inherits from `Source::TreeRewriter`.
+
+### `#support_autocorrect?`
+
+*Legacy:* was an instance method.
+
+*Current:* now a class method.
+
+### `Corrector`
+
+*Legacy:* accepted a second argument (an array of lambdas). Available through `Legacy::Corrector` if needed.
+
+*Current:* no second argument; not needed as correctors can be merged.
+
+## Misc
+
+* `#find_location` is deprecated.
+
+* `Correction` is deprecated.
+
+* A few registry access methods were moved from `Cop` to `Registry` both for correctness (e.g. `MyCop.qualified_cop_name` did not work nor made sense) and so that `Cop::Cop` no longer holds any necessary code anymore. Backwards compatibility is maintained.
+  * `Cop.registry` => `Registry.global`
+  * `Cop.all` => `Registry.all`
+  * `Cop.qualified_cop_name` => `Registry.qualified_cop_name`
