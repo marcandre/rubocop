@@ -2,48 +2,49 @@
 
 module RuboCop
   module Cop
-    # Minimalist implementation for API.
-    # *** Actualy implementation would look nothing like this ***
+    # This module allows a more streamlined way to add an offense
+    # and make a correction at once.
+    #
     module Autocorrector
-      Sugar = Struct.new(:do_yield) do
-        def enabled?
-          yield if do_yield
-        end
-      end
-
-      class FakeCorrector
-        attr_reader :called
-
-        def remove(*)
-          @called = true
-        end
-
-        %i[insert_before insert_after wrap replace remove_preceding
-           remove_leading remove_trailing].each do |method|
-          alias_method method, :remove
-        end
-      end
-
-      attr_reader :block
-
+      # Yields a corrector
+      #
       def add_offense(node_or_range, message: nil, severity: nil, &block)
-        range = node_or_range.respond_to?(:loc) ? node_or_range.loc.expression : node_or_range
-        @block = block
-        if block && block.arity == 0
-          raise 'This block is should accept a `corrector` argument. '\
-                'If you meant to pass a post processing block, use ' \
-                '`add_offense(...).enabled? { <your block here }` instead.'
+        range = if node_or_range.respond_to?(:loc)
+                  node_or_range.loc.expression
+                else
+                  node_or_range
+                end
+        @last_block = block
+        super(range, location: range, message: message, severity: severity) do
+          # This happens if @options[:auto_correct] is set to false
+          _call_last_block(range) if @last_block
         end
-        super(node_or_range, location: range, message: message, severity: severity, &nil)
-        Sugar.new(@offenses.last.status != :disabled)
       end
 
-      def autocorrect(_)
-        return unless @block
+      # :nodoc:
+      def autocorrect(range)
+        return false unless @last_block
 
-        corrector = FakeCorrector.new
-        @block.call(corrector)
-        @block if corrector.called
+        our_corrector = _call_last_block(range)
+        return false if our_corrector.empty?
+
+        ->(corrector) { corrector.merge!(our_corrector) }
+      end
+
+      private
+
+      # :nodoc:
+      def _call_last_block(range)
+        our_corrector = Corrector.new(processed_source.buffer)
+        begin
+          @last_block.call(our_corrector)
+        rescue StandardError => e
+          raise ErrorWithAnalyzedFileLocation.new(
+            cause: e, node: range, cop: self
+          )
+        end
+        @last_block = nil # Block already called, don't call twice
+        our_corrector
       end
     end
   end
