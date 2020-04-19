@@ -106,12 +106,14 @@ module RuboCop
 
         def incorrect_style(when_node)
           add_offense(when_node.loc.keyword) do |corrector|
+            detect_incorrect_style(when_node)
+
             whitespace = whitespace_range(when_node)
 
             if whitespace.source.strip.empty?
               corrector.replace(whitespace, replacement(when_node))
             end
-          end.enabled? { detect_incorrect_style(when_node) }
+          end
         end
 
         def detect_incorrect_style(when_node)
