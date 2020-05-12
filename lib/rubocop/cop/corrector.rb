@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require_relative 'legacy/corrections_support'
 
 module RuboCop
   module Cop
@@ -9,40 +10,9 @@ module RuboCop
     # The nodes modified by the corrections should be part of the
     # AST of the source_buffer.
     class Corrector < ::Parser::Source::TreeRewriter
-      # Legacy support for Corrector#corrections
-      # Used to be an array of lambdas to be called on a corrector
-      class CorrectionsProxy
-        def initialize(corrector)
-          @corrector = corrector
-        end
-
-        def <<(callable)
-          @corrector.transaction do
-            callable.call(@corrector)
-          end
-        rescue ErrorWithAnalyzedFileLocation => e
-          # ignore Clobbering errors
-          raise e unless e.cause.is_a?(::Parser::ClobberingError)
-        end
-
-        def empty?
-          @corrector.empty?
-        end
-
-        def concat(corrections)
-          corrections.each { |correction| self << correction }
-        end
-
-        protected
-
-        attr_reader :corrector
-      end
+      prepend Legacy::CorrectionsSupport
 
       # @param source_buffer [Parser::Source::Buffer]
-      # @param corrections [Array(#call)]
-      #   This is deprecated.
-      #   Array of Objects that respond to #call. They will receive the
-      #   corrector itself and should use its method to modify the source.
       #
       #   corrector = Corrector.new(source_buffer)
       def initialize(source_buffer, corr = [])
@@ -58,18 +28,9 @@ module RuboCop
 
         # Don't print warnings to stderr if corrections conflict with each other
         diagnostics.consumer = ->(diagnostic) {}
-
-        # Support legacy argument
-        corr.each do |c|
-          corrections << c
-        end
       end
 
       alias rewrite process # Legacy
-
-      def corrections
-        CorrectionsProxy.new(self)
-      end
 
       # Inserts new code before the given source range.
       #
