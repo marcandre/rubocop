@@ -9,6 +9,31 @@ module CopHelper
   let(:ruby_version) { 2.4 }
   let(:rails_version) { false }
 
+  let(:source) { 'code = {some: :ruby}' }
+
+  let(:processed_source) { parse_source(source, 'test') }
+
+  let(:source_buffer) { processed_source.buffer }
+
+  let(:cop_class) do
+    described_class.is_a?(Class) && described_class < RuboCop::Cop::Cop ?
+      described_class : RuboCop::Cop::Cop
+  end
+
+  let(:options) { {} }
+
+  let(:config) { RuboCop::Config.new({}) }
+
+  let(:cop) do
+    cop_class.new(config, options)
+    .tap { |cop| cop.processed_source = processed_source }
+  end
+
+  def source_range(buffer = source_buffer, range)
+    Parser::Source::Range.new(buffer, range.begin,
+      range.exclude_end? ? range.end : range.end+1)
+  end
+
   def inspect_source_file(source)
     Tempfile.open('tmp') { |f| inspect_source(source, f) }
   end
