@@ -188,7 +188,9 @@ RSpec.describe RuboCop::Cop::Cop do
       context 'when offense was corrected' do
         before do
           allow(cop).to receive(:autocorrect?).and_return(true)
-          allow(cop).to receive(:autocorrect).and_return(->(_corrector) {})
+          allow(cop).to receive(:autocorrect).and_return(->(corrector) do
+            corrector.insert_before(location, 'hi!')
+          end)
         end
 
         it 'is set to true' do
