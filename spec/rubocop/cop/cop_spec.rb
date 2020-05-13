@@ -171,7 +171,7 @@ RSpec.describe RuboCop::Cop::Cop, :config do
       context 'when offense was corrected' do
         before do
           allow(cop).to receive(:autocorrect?).and_return(true)
-          allow(cop).to receive(:autocorrect).and_return(->(corrector) do
+          allow(cop).to receive(:autocorrect).and_return(lambda do |corrector|
             corrector.insert_before(location, 'hi!')
           end)
         end
@@ -269,9 +269,9 @@ RSpec.describe RuboCop::Cop::Cop, :config do
       end
     end
 
-    let(:cop_class) { support_autocorrect ? Test::AutocorrectingCop : super() }
-
     subject { cop.autocorrect? }
+
+    let(:cop_class) { support_autocorrect ? Test::AutocorrectingCop : super() }
 
     let(:support_autocorrect) { true }
     let(:disable_uncorrectable) { false }

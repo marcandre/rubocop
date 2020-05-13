@@ -27,7 +27,7 @@ module RuboCop
       #   source 'http://rubygems.org'
       class InsecureProtocolSource < Cop
         include RangeHelp
-        include Autocorrector
+        extend Autocorrector
 
         MSG = 'The source `:%<source>s` is deprecated because HTTP requests ' \
               'are insecure. ' \

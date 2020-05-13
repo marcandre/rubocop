@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require_relative 'legacy/corrections_support'
 
 module RuboCop
@@ -10,17 +11,24 @@ module RuboCop
     # The nodes modified by the corrections should be part of the
     # AST of the source_buffer.
     class Corrector < ::Parser::Source::TreeRewriter
-      prepend Legacy::CorrectionsSupport
+      prepend Legacy::AutocorrectSupport::Corrector
+      prepend Legacy::CorrectionsSupport::Corrector
 
-      # @param source_buffer [Parser::Source::Buffer]
+      # @param source [Parser::Source::Buffer, or anything
+      #                leading to one via `(processed_source.)buffer`]
       #
-      #   corrector = Corrector.new(source_buffer)
-      def initialize(source_buffer, corr = [])
-        raise 'source_buffer should be a Parser::Source::Buffer' unless \
-          source_buffer.is_a? Parser::Source::Buffer
+      #   corrector = Corrector.new(cop)
+      def initialize(source)
+        source = source.processed_source if source.respond_to?(:processed_source)
+        source = source.buffer if source.respond_to?(:buffer)
+
+        unless source.is_a? Parser::Source::Buffer
+          raise TypeError, 'Expected argument to lead to a Parser::Source::Buffer ' \
+                           "but got #{source.inspect}"
+        end
 
         super(
-          source_buffer,
+          source,
           different_replacements: :raise,
           swallowed_insertions: :raise,
           crossing_deletions: :accept
@@ -31,19 +39,6 @@ module RuboCop
       end
 
       alias rewrite process # Legacy
-
-      # Inserts new code before the given source range.
-      #
-      # @param [Parser::Source::Range, Rubocop::AST::Node] range or node
-      # @param [String] content
-      def insert_before(node_or_range, content)
-        range = to_range(node_or_range)
-        # TODO: Fix Cops using bad ranges instead
-        if range.end_pos > @source_buffer.source.size
-          range = range.with(end_pos: @source_buffer.source.size)
-        end
-        super(range, content)
-      end
 
       # Removes `size` characters prior to the source range.
       #

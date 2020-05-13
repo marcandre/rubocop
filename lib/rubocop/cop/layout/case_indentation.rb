@@ -71,7 +71,7 @@ module RuboCop
         include Alignment
         include ConfigurableEnforcedStyle
         include RangeHelp
-        include Autocorrector
+        extend Autocorrector
 
         MSG = 'Indent `when` %<depth>s `%<base>s`.'
 
@@ -110,9 +110,7 @@ module RuboCop
 
             whitespace = whitespace_range(when_node)
 
-            if whitespace.source.strip.empty?
-              corrector.replace(whitespace, replacement(when_node))
-            end
+            corrector.replace(whitespace, replacement(when_node)) if whitespace.source.strip.empty?
           end
         end
 

@@ -27,7 +27,7 @@ module RuboCop
       class SpaceAroundBlockParameters < Cop
         include ConfigurableEnforcedStyle
         include RangeHelp
-        include Autocorrector
+        extend Autocorrector
 
         def on_block(node)
           arguments = node.arguments

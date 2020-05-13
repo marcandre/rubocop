@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'uri'
+require_relative 'legacy/autocorrect_support'
+require_relative 'legacy/corrections_support'
 
 module RuboCop
   module Cop
@@ -23,26 +25,22 @@ module RuboCop
     #       # Do custom processing
     #     end
     #   end
-    class Cop
+    class Cop # rubocop:disable Metrics/ClassLength
       extend RuboCop::AST::Sexp
       extend NodePattern::Macros
       include RuboCop::AST::Sexp
       include Util
       include IgnoredNode
       include AutocorrectLogic
-
-      Correction = Struct.new(:lambda, :node, :cop) do
-        def call(corrector)
-          lambda.call(corrector)
-        rescue StandardError => e
-          raise ErrorWithAnalyzedFileLocation.new(
-            cause: e, node: node, cop: cop
-          )
-        end
+      if ENV.fetch('V0_SUPPORT', 'true').start_with? 't'
+        prepend Legacy::AutocorrectSupport::Cop
+        include Legacy::CorrectionsSupport::Cop
+      else
+        extend V1Support
       end
 
-      attr_reader :config, :offenses, :corrections
-      attr_accessor :processed_source # TODO: Bad design.
+      attr_reader :config, :offenses
+      attr_reader :processed_source
 
       @registry = Registry.new
 
@@ -100,12 +98,13 @@ module RuboCop
       def initialize(config = nil, options = nil)
         @config = config || Config.new
         @options = options || { debug: false }
+        self.processed_source = nil
+      end
 
+      def processed_source=(processed_source)
         @offenses = []
-        @corrections = []
-        @corrected_nodes = {}
-        @corrected_nodes.compare_by_identity
-        @processed_source = nil
+        @processed_source = processed_source
+        @corrector = _new_corrector
       end
 
       def join_force?(_force_class)
@@ -119,67 +118,68 @@ module RuboCop
                                .merge(@config.for_cop(self))
       end
 
-      def message(_node = nil)
+      def message(_range = nil)
         self.class::MSG
       end
 
-      def add_offense(node, location: :expression, message: nil, severity: nil)
-        loc = find_location(node, location)
+      # Yields a corrector
+      #
+      def add_offense(node_or_range, message: nil, severity: nil, &block)
+        range = _range_from_node_or_range(node_or_range)
 
-        return if duplicate_location?(loc)
+        return if duplicate_location?(range)
 
-        severity = find_severity(node, severity)
-        message = find_message(node, message)
+        range_to_pass = _callback_argument(range)
 
-        status = enabled_line?(loc.line) ? correct(node) : :disabled
+        severity = find_severity(range_to_pass, severity)
+        message = find_message(range_to_pass, message)
 
-        @offenses << Offense.new(severity, loc, message, name, status)
-        yield if block_given? && status != :disabled
-      end
+        status = enabled_line?(range.line) ? correct(range, &block) : :disabled
 
-      def find_location(node, loc)
-        # Location can be provided as a symbol, e.g.: `:keyword`
-        loc.is_a?(Symbol) ? node.loc.public_send(loc) : loc
+        @offenses << Offense.new(severity, range, message, name, status)
       end
 
       def duplicate_location?(location)
         @offenses.any? { |o| o.location == location }
       end
 
-      def correct(node)
-        reason = reason_to_not_correct(node)
-        return reason if reason
+      def correct(range)
+        status = correction_strategy
 
-        @corrected_nodes[node] = true
+        if block_given?
+          corrector = _new_corrector
+          yield corrector
+        end
+
+        case status
+        when :corrected_with_todo
+          _apply_correction(disable_uncorrectable(range))
+        when :corrected
+          return :uncorrected if corrector.nil? || corrector.empty?
+
+          _apply_correction(corrector)
+        end
+        status
+      end
+
+      def correction_strategy
+        return :unsupported unless correctable?
+        return :uncorrected unless autocorrect?
+
         if support_autocorrect?
-          correction = autocorrect(node)
-          return :uncorrected unless correction
-
-          @corrections << Correction.new(correction, node, self)
           :corrected
         elsif disable_uncorrectable?
-          disable_uncorrectable(node)
           :corrected_with_todo
         end
       end
 
-      def reason_to_not_correct(node)
-        return :unsupported unless correctable?
-        return :uncorrected unless autocorrect?
-        return :already_corrected if @corrected_nodes.key?(node)
-
-        nil
-      end
-
-      def disable_uncorrectable(node)
-        return unless node
-
+      def disable_uncorrectable(range)
         @disabled_lines ||= {}
-        line = node.location.line
+        line = range.line
         return if @disabled_lines.key?(line)
 
         @disabled_lines[line] = true
-        @corrections << Correction.new(disable_offense(node), node, self)
+        disable_offense(range)
       end
 
       def config_to_allow_offenses
@@ -238,10 +238,35 @@ module RuboCop
         nil
       end
 
+      def self.v1_support?
+        true
+      end
+
       private
 
-      def find_message(node, message)
-        annotate(message || message(node))
+      # Layer for legacy/autocorrect_support
+      def _callback_argument(range)
+        range
+      end
+
+      def _apply_correction(corrector)
+        @corrector.merge!(corrector) if corrector
+      end
+
+      def _new_corrector
+        Corrector.new(self) if processed_source&.valid_syntax?
+      end
+
+      def _range_from_node_or_range(node_or_range)
+        if node_or_range.respond_to?(:loc)
+          node_or_range.loc.expression
+        else
+          node_or_range
+        end
+      end
+
+      def find_message(range, message)
+        annotate(message || message(range))
       end
 
       def annotate(message)
@@ -271,7 +296,7 @@ module RuboCop
         @processed_source.comment_config.cop_enabled_at_line?(self, line_number)
       end
 
-      def find_severity(_node, severity)
+      def find_severity(_range, severity)
         custom_severity || severity || default_severity
       end
 
