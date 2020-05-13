@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'uri'
+require_relative 'legacy/autocorrect_support'
+require_relative 'legacy/corrections_support'
 
 module RuboCop
   module Cop
@@ -30,18 +32,10 @@ module RuboCop
       include Util
       include IgnoredNode
       include AutocorrectLogic
+      prepend Legacy::AutocorrectSupport
+      include Legacy::CorrectionsSupport::Cop
 
-      Correction = Struct.new(:lambda, :node, :cop) do
-        def call(corrector)
-          lambda.call(corrector)
-        rescue StandardError => e
-          raise ErrorWithAnalyzedFileLocation.new(
-            cause: e, node: node, cop: cop
-          )
-        end
-      end
-
-      attr_reader :config, :offenses, :corrections
+      attr_reader :config, :offenses
       attr_accessor :processed_source # TODO: Bad design.
 
       @registry = Registry.new
@@ -100,12 +94,14 @@ module RuboCop
       def initialize(config = nil, options = nil)
         @config = config || Config.new
         @options = options || { debug: false }
+        @legacy_argument = nil # See Legacy::AutocorrectSupport
+        self.processed_source = nil
+      end
 
+      def processed_source=(processed_source)
         @offenses = []
-        @corrections = []
-        @corrected_nodes = {}
-        @corrected_nodes.compare_by_identity
-        @processed_source = nil
+        @processed_source = processed_source
+        @corrector = Corrector.new(self) if processed_source
       end
 
       def join_force?(_force_class)
@@ -119,67 +115,74 @@ module RuboCop
                                .merge(@config.for_cop(self))
       end
 
-      def message(_node = nil)
+      def message(_range = nil)
         self.class::MSG
       end
 
-      def add_offense(node, location: :expression, message: nil, severity: nil)
-        loc = find_location(node, location)
+      # Yields a corrector
+      #
+      def add_offense(node_or_range, message: nil, severity: nil, &block)
+        range = _range_from_node_or_range(node_or_range)
 
-        return if duplicate_location?(loc)
+        return if duplicate_location?(range)
 
-        severity = find_severity(node, severity)
-        message = find_message(node, message)
+        severity = find_severity(@legacy_argument || range, severity)
+        message = find_message(@legacy_argument || range, message)
 
-        status = enabled_line?(loc.line) ? correct(node) : :disabled
+        status = enabled_line?(range.line) ? correct(range, &block) : :disabled
 
-        @offenses << Offense.new(severity, loc, message, name, status)
-        yield if block_given? && status != :disabled
-      end
-
-      def find_location(node, loc)
-        # Location can be provided as a symbol, e.g.: `:keyword`
-        loc.is_a?(Symbol) ? node.loc.public_send(loc) : loc
+        @offenses << Offense.new(severity, range, message, name, status)
       end
 
       def duplicate_location?(location)
         @offenses.any? { |o| o.location == location }
       end
 
-      def correct(node)
-        reason = reason_to_not_correct(node)
-        return reason if reason
+      def correct(range)
+        status = correction_strategy(range)
 
-        @corrected_nodes[node] = true
+        if block_given? && status != :disabled
+          corrector = Corrector.new(self)
+          # begin
+            yield corrector
+          # rescue StandardError => e
+          #   raise ErrorWithAnalyzedFileLocation.new(
+          #     cause: e, node: range, cop: self
+          #   )
+          # end
+        end
+        apply = case status
+        when :corrected_with_todo
+          disable_uncorrectable(range)
+        when :corrected
+          status = :uncorrected if corrector == nil || corrector.empty?
+          corrector
+        else
+          # disregard corrector
+        end
+
+        @corrector.merge!(apply) if apply
+        status
+      end
+
+      def correction_strategy(range)
+        return :unsupported unless correctable?
+        return :uncorrected unless autocorrect?
+
         if support_autocorrect?
-          correction = autocorrect(node)
-          return :uncorrected unless correction
-
-          @corrections << Correction.new(correction, node, self)
           :corrected
         elsif disable_uncorrectable?
-          disable_uncorrectable(node)
           :corrected_with_todo
         end
       end
 
-      def reason_to_not_correct(node)
-        return :unsupported unless correctable?
-        return :uncorrected unless autocorrect?
-        return :already_corrected if @corrected_nodes.key?(node)
-
-        nil
-      end
-
-      def disable_uncorrectable(node)
-        return unless node
-
+      def disable_uncorrectable(range)
         @disabled_lines ||= {}
-        line = node.location.line
+        line = range.line
         return if @disabled_lines.key?(line)
 
         @disabled_lines[line] = true
-        @corrections << Correction.new(disable_offense(node), node, self)
+        disable_offense(range)
       end
 
       def config_to_allow_offenses
@@ -240,8 +243,17 @@ module RuboCop
 
       private
 
-      def find_message(node, message)
-        annotate(message || message(node))
+      # :nodoc:
+      def _range_from_node_or_range(node_or_range)
+        if node_or_range.respond_to?(:loc)
+          node_or_range.loc.expression
+        else
+          node_or_range
+        end
+      end
+
+      def find_message(range, message)
+        annotate(message || message(range))
       end
 
       def annotate(message)
@@ -271,7 +283,7 @@ module RuboCop
         @processed_source.comment_config.cop_enabled_at_line?(self, line_number)
       end
 
-      def find_severity(_node, severity)
+      def find_severity(_range, severity)
         custom_severity || severity || default_severity
       end
 

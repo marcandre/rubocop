@@ -33,19 +33,32 @@ module RuboCop
       end
 
       module CorrectionsSupport
-        # Support legacy corrections
-        def initialize(source_buffer, corr = [])
-          super(source_buffer)
-
-          # warn "Corrector.new with corrections is deprecated." unless corr.empty?
-          corr.each do |c|
-            corrections << c
+        module Cop
+          def corrections
+            # warn 'Cop#corrections is deprecated' TODO
+            @corrector.corrections
           end
         end
 
-        def corrections
-          # warn "Corrector#corrections is deprecated. Open an issue if you have a valid usecase."
-          CorrectionsProxy.new(self)
+        module Corrector
+          # Support legacy corrections
+          def initialize(source, corr = [])
+            super(source)
+
+            if corr.is_a?(CorrectionsProxy)
+              merge!(corr.send :corrector)
+            else
+              # warn "Corrector.new with corrections is deprecated." unless corr.empty? TODO
+              corr.each do |c|
+                corrections << c
+              end
+            end
+          end
+
+          def corrections
+            # warn "Corrector#corrections is deprecated. Open an issue if you have a valid usecase." TODO
+            CorrectionsProxy.new(self)
+          end
         end
       end
     end

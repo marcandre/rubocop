@@ -10,17 +10,21 @@ module RuboCop
     # The nodes modified by the corrections should be part of the
     # AST of the source_buffer.
     class Corrector < ::Parser::Source::TreeRewriter
-      prepend Legacy::CorrectionsSupport
+      prepend Legacy::CorrectionsSupport::Corrector
 
-      # @param source_buffer [Parser::Source::Buffer]
+      # @param source [Parser::Source::Buffer, or anything
+      #                leading to one via `(processed_source.)buffer`]
       #
-      #   corrector = Corrector.new(source_buffer)
-      def initialize(source_buffer, corr = [])
-        raise 'source_buffer should be a Parser::Source::Buffer' unless \
-          source_buffer.is_a? Parser::Source::Buffer
+      #   corrector = Corrector.new(cop)
+      def initialize(source, corr = [])
+        source = source.processed_source if source.respond_to?(:processed_source)
+        source = source.buffer if source.respond_to?(:buffer)
+
+        raise TypeError, 'Expected argument to lead to a Parser::Source::Buffer ' \
+                         "but got #{source.inspect}" unless source.is_a? Parser::Source::Buffer
 
         super(
-          source_buffer,
+          source,
           different_replacements: :raise,
           swallowed_insertions: :raise,
           crossing_deletions: :accept
