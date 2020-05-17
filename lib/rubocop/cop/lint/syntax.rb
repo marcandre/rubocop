@@ -15,6 +15,7 @@ module RuboCop
         def self.offenses_from_processed_source(processed_source,
                                                 config, options)
           cop = new(config, options)
+          cop.processed_source = processed_source
 
           cop.add_offense_from_error(processed_source.parser_error) if processed_source.parser_error
 
