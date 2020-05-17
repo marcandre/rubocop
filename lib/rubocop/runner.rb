@@ -153,6 +153,7 @@ module RuboCop
     def add_redundant_disables(file, offenses, source)
       if check_for_redundant_disables?(source)
         redundant_cop_disable_directive(file) do |cop|
+          cop.processed_source = source
           cop.check(offenses, source.disabled_line_ranges, source.comments)
           offenses += cop.offenses
           offenses += autocorrect_redundant_disables(file, source, cop,
@@ -181,8 +182,6 @@ module RuboCop
     end
 
     def autocorrect_redundant_disables(file, source, cop, offenses)
-      cop.processed_source = source
-
       team = Cop::Team.new(RuboCop::Cop::Registry.new, nil, @options)
       team.autocorrect(source.buffer, [cop])
 
