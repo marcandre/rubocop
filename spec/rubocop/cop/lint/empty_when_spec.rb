@@ -38,67 +38,156 @@ RSpec.describe RuboCop::Cop::Lint::EmptyWhen, :config do
 
   let(:message) { 'Avoid `when` branches without a body.' }
 
-  context 'when a `when` body is missing' do
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar then 1
-      when :baz # nothing
-      end
-    RUBY
+  context 'when AllowComments is false' do
+    let(:cop_config) { {'AllowComments' => false} }
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar then 1
-      when :baz # nothing
-      else 3
-      end
-    RUBY
+    context 'when a `when` body is missing' do
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz # nothing
+        end
+      RUBY
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar then 1
-      when :baz then # nothing
-      end
-    RUBY
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz # nothing
+        else 3
+        end
+      RUBY
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar then 1
-      when :baz then # nothing
-      else 3
-      end
-    RUBY
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz then # nothing
+        end
+      RUBY
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar
-        1
-      when :baz
-        # nothing
-      end
-    RUBY
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz then # nothing
+        else 3
+        end
+      RUBY
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case foo
-      when :bar
-        1
-      when :baz
-        # nothing
-      else
-        3
-      end
-    RUBY
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+          # nothing
+        end
+      RUBY
 
-    it_behaves_like 'code with offense', <<~RUBY
-      case
-      when :bar
-        1
-      when :baz
-        # nothing
-      else
-        3
-      end
-    RUBY
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+          # nothing
+        else
+          3
+        end
+      RUBY
+    end
+  end
+
+  context 'when AllowComments is true' do
+    let(:cop_config) { {'AllowComments' => true} }
+
+    context 'when a `when` body is missing' do
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz # nothing
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz # nothing
+        else 3
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz then # nothing
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar then 1
+        when :baz then # nothing
+        else 3
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+          # nothing
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+
+          # nothing
+        end
+      RUBY
+
+      it_behaves_like 'code with offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+        when :quz # some comment
+          2
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case foo
+        when :bar
+          1
+        when :baz
+          # nothing
+        else
+          3
+        end
+      RUBY
+
+      it_behaves_like 'code without offense', <<~RUBY
+        case
+        when :bar
+          1
+        when :baz
+          # nothing
+        else
+          3
+        end
+      RUBY
+
+      it_behaves_like 'code with offense', <<~RUBY
+        case condition
+        when foo
+          # do something
+          do_something
+        when bar
+        end
+      RUBY
+    end
   end
 
   context 'when a `when` body is present' do
@@ -144,32 +233,6 @@ RSpec.describe RuboCop::Cop::Lint::EmptyWhen, :config do
         2
       else
         3
-      end
-    RUBY
-  end
-
-  context 'when `AllowComments: true`' do
-    let(:cop_config) { { 'AllowComments' => true } }
-
-    it_behaves_like 'code without offense', <<~RUBY
-      case condition
-      when foo
-        do_something
-      when bar
-        # do nothing
-      end
-    RUBY
-  end
-
-  context 'when `AllowComments: false`' do
-    let(:cop_config) { { 'AllowComments' => false } }
-
-    it_behaves_like 'code with offense', <<~RUBY
-      case condition
-      when foo
-        do_something
-      when bar
-        # do nothing
       end
     RUBY
   end
