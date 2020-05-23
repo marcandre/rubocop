@@ -8,20 +8,6 @@ module RuboCop
       module AutocorrectSupport
         # Extension for Cop::Corrector
         module Corrector
-          # Copy legacy v0 setting from cop
-          def initialize(source, *)
-            source = fix_source(source)
-            super
-          end
-
-          private
-
-          def fix_source(source)
-            return source unless source.is_a?(Cop) && source.processed_source.nil?
-
-            # warn "Calling add_offense on a cop that doesn't have a processed buffer is deprecated"
-            ::Parser::Source::Buffer.new('bogus').tap { |b| b.source = '' }
-          end
         end
 
         # Extension for Cop::Cop
