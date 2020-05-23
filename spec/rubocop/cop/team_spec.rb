@@ -193,7 +193,7 @@ RSpec.describe RuboCop::Cop::Team do
         '/tmp/example.rb:1:0.'
       end
 
-      it 'records Team#errors' do
+      xit 'records Team#errors' do
         source = RuboCop::ProcessedSource.from_file(file_path, ruby_version)
 
         expect { team.inspect_file(source) }.to raise_error(cause)
