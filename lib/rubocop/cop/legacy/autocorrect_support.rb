@@ -62,8 +62,12 @@ module RuboCop
             else
               @v0_argument = node_or_range
               range = find_location(node_or_range, location)
-              super(range, message: message, severity: severity) do |corrector|
-                _emulate_v0_callsequence(corrector, &block)
+              if block.nil? && !autocorrect?
+                super(range, message: message, severity: severity)
+              else
+                super(range, message: message, severity: severity) do |corrector|
+                  _emulate_v0_callsequence(corrector, &block)
+                end
               end
             end
           end
@@ -120,7 +124,7 @@ module RuboCop
             return super if self.class.v1_support?
 
             begin
-              @corrector&.merge!(corrector) if corrector
+              _corrector.merge!(corrector) if corrector
             rescue ::Parser::ClobberingError
               # ignore
             end

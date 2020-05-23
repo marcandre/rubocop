@@ -104,7 +104,7 @@ module RuboCop
       def processed_source=(processed_source)
         @offenses = []
         @processed_source = processed_source
-        @corrector = _new_corrector
+        @corrector = nil
       end
 
       def join_force?(_force_class)
@@ -262,12 +262,16 @@ module RuboCop
         range
       end
 
+      def _corrector
+        @corrector ||= _new_corrector
+      end
+
       def _apply_correction(corrector)
-        @corrector.merge!(corrector) if corrector
+        _corrector.merge!(corrector) if corrector
       end
 
       def _new_corrector
-        Corrector.new(self) if processed_source&.valid_syntax?
+        Corrector.new(self) if processed_source
       end
 
       def _range_from_node_or_range(node_or_range)
