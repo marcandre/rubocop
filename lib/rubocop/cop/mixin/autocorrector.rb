@@ -8,8 +8,6 @@ module RuboCop
     # that the cop supports autocorrection
     #
     module Autocorrector
-      include V1Support
-
       def support_autocorrect?
         true
       end

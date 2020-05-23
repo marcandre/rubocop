@@ -83,8 +83,8 @@ module RuboCop
             self.class.support_autocorrect?
           end
 
-          def self.prepended(base)
-            base.singleton_class.prepend ClassMethods
+          def self.included(base)
+            base.extend ClassMethods
           end
 
           def _new_corrector
@@ -108,7 +108,7 @@ module RuboCop
             lambda = _correction_lambda
             yield corrector if block_given?
             if corrector && !corrector.empty?
-              raise 'Your cop should extend RuboCop::Cop::Autocorrector'
+              raise 'Your cop must call `self.support_autocorrect = true`'
             end
 
             begin
