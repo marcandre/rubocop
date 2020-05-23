@@ -32,12 +32,8 @@ module RuboCop
       include Util
       include IgnoredNode
       include AutocorrectLogic
-      if ENV.fetch('V0_SUPPORT', 'true').start_with? 't'
-        prepend Legacy::AutocorrectSupport::Cop
-        include Legacy::CorrectionsSupport::Cop
-      else
-        extend V1Support
-      end
+      prepend Legacy::AutocorrectSupport::Cop
+      include Legacy::CorrectionsSupport::Cop
 
       attr_reader :config, :offenses
       attr_reader :processed_source
