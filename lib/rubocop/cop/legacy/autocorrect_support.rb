@@ -10,7 +10,7 @@ module RuboCop
         module Corrector
           # Copy legacy v0 setting from cop
           def initialize(source, *)
-            source = _fix_source(source)
+            source = fix_source(source)
             super
           end
 
@@ -31,7 +31,7 @@ module RuboCop
 
           private
 
-          def _fix_source(source)
+          def fix_source(source)
             @v1_support = source.is_a?(Cop) && source.class.v1_support?
             return source unless source.is_a?(Cop) && source.processed_source.nil?
 
@@ -66,7 +66,7 @@ module RuboCop
                 super(range, message: message, severity: severity)
               else
                 super(range, message: message, severity: severity) do |corrector|
-                  _emulate_v0_callsequence(corrector, &block)
+                  emulate_v0_callsequence(corrector, &block)
                 end
               end
             end
@@ -104,8 +104,8 @@ module RuboCop
 
           private
 
-          def _emulate_v0_callsequence(corrector)
-            lambda = _correction_lambda
+          def emulate_v0_callsequence(corrector)
+            lambda = correction_lambda
             yield corrector if block_given?
             if corrector && !corrector.empty?
               raise 'Your cop must call `self.support_autocorrect = true`'
@@ -118,31 +118,31 @@ module RuboCop
             end
           end
 
-          def _callback_argument(_range)
+          def callback_argument(_range)
             return super if self.class.v1_support?
 
             @v0_argument
           end
 
-          def _apply_correction(corrector)
+          def apply_correction(corrector)
             return super if self.class.v1_support?
 
             begin
-              _corrector.merge!(corrector) if corrector
+              current_corrector.merge!(corrector) if corrector
             rescue ::Parser::ClobberingError
               # ignore
             end
           end
 
-          def _correction_lambda
+          def correction_lambda
             return unless correction_strategy == :corrected
 
-            _dedup_on_node(@v0_argument) do
+            dedup_on_node(@v0_argument) do
               autocorrect(@v0_argument)
             end
           end
 
-          def _dedup_on_node(node)
+          def dedup_on_node(node)
             @corrected_nodes ||= {}.compare_by_identity
             yield unless @corrected_nodes.key?(node)
           ensure

@@ -97,11 +97,11 @@ module RuboCop
       # Yields a corrector
       #
       def add_offense(node_or_range, message: nil, severity: nil, &block)
-        range = _range_from_node_or_range(node_or_range)
+        range = range_from_node_or_range(node_or_range)
 
         return if duplicate_location?(range)
 
-        range_to_pass = _callback_argument(range)
+        range_to_pass = callback_argument(range)
 
         severity = find_severity(range_to_pass, severity)
         message = find_message(range_to_pass, message)
@@ -125,11 +125,11 @@ module RuboCop
 
         case status
         when :corrected_with_todo
-          _apply_correction(disable_uncorrectable(range))
+          apply_correction(disable_uncorrectable(range))
         when :corrected
           return :uncorrected if corrector.nil? || corrector.empty?
 
-          _apply_correction(corrector)
+          apply_correction(corrector)
         end
         status
       end
@@ -227,23 +227,23 @@ module RuboCop
       private
 
       # Layer for legacy/autocorrect_support
-      def _callback_argument(range)
+      def callback_argument(range)
         range
       end
 
-      def _corrector
+      def current_corrector
         @corrector ||= _new_corrector
       end
 
-      def _apply_correction(corrector)
-        _corrector.merge!(corrector) if corrector
+      def apply_correction(corrector)
+        current_corrector.merge!(corrector) if corrector
       end
 
       def _new_corrector
         Rewriter.new(self) if processed_source
       end
 
-      def _range_from_node_or_range(node_or_range)
+      def range_from_node_or_range(node_or_range)
         if node_or_range.respond_to?(:loc)
           node_or_range.loc.expression
         else
