@@ -242,6 +242,19 @@ module RuboCop
         true
       end
 
+      def self.support_autocorrect=(support)
+        if support
+          extend Autocorrector
+        else
+          extend V1Support
+        end
+      end
+
+      # Class methods
+      def self.support_autocorrect?
+        false
+      end
+
       private
 
       # Layer for legacy/autocorrect_support

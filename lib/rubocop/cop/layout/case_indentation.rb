@@ -71,7 +71,7 @@ module RuboCop
         include Alignment
         include ConfigurableEnforcedStyle
         include RangeHelp
-        extend Autocorrector
+        self.support_autocorrect = true
 
         MSG = 'Indent `when` %<depth>s `%<base>s`.'
 

@@ -5,7 +5,7 @@
 Your custom cops should continue to work in v1.
 Nevertheless it is suggested that you tweak them to use the v1 API by following the following steps:
 
-1) Your class should `extend V1Support`
+1) Your class should call `self.support_autocorrect = <true or false>`
 
 2) Locate your calls to `add_offense` and make sure that you pass as the first argument either a `AST::Node`, a `::Parser::Source::Comment` or a `::Parser::Source::Range`, and no `location:` named parameter
 
@@ -22,7 +22,7 @@ class MySillyCop < Cop
 
 # After
 class MySillyCop < RuboCop::Cop::Cop
-  extend RuboCop::Cop::V1Support # This signals your Cop is V1 ready
+  self.support_autocorrect = false
 
   def on_send(node)
     if node.method_name == :+
@@ -35,9 +35,7 @@ end
 
 3) If your class support autocorrection
 
-a) Your class should `extend RuboCop::Cop::Autocorrector`. This will `extend V1Support` automatically btw.
-
-b) The `corrector` is now yielded from `add_offense`. Move the code of your method `auto_correct` in that block and do not wrap your correction in a lambda.
+The `corrector` is now yielded from `add_offense`. Move the code of your method `auto_correct` in that block and do not wrap your correction in a lambda.
 
 ### Example:
 
@@ -61,8 +59,7 @@ end
 ```
 # After
 class MySillyCorrectingCop < RuboCop::Cop::Cop
-  API = 1    # Not actually necessary...
-  extend RuboCop::Cop::Autocorrector  # ... when you extend this
+  self.support_autocorrect = true
 
   def on_send(node)
     if node.method_name == :+

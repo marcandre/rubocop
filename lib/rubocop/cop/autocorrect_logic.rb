@@ -36,17 +36,6 @@ module RuboCop
         true
       end
 
-      def self.included(base)
-        base.extend(ClassMethods)
-      end
-
-      # Class methods
-      module ClassMethods
-        def support_autocorrect?
-          false
-        end
-      end
-
       private
 
       def disable_offense(range)
