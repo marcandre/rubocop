@@ -119,7 +119,7 @@ module RuboCop
         status = correction_strategy
 
         if block_given?
-          corrector = _new_corrector
+          corrector = Rewriter.new(self)
           yield corrector
         end
 
@@ -232,15 +232,11 @@ module RuboCop
       end
 
       def current_corrector
-        @corrector ||= _new_corrector
+        @corrector ||= Rewriter.new(self)
       end
 
       def apply_correction(corrector)
         current_corrector.merge!(corrector) if corrector
-      end
-
-      def _new_corrector
-        Rewriter.new(self) if processed_source
       end
 
       def range_from_node_or_range(node_or_range)

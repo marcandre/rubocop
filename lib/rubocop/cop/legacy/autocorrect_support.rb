@@ -14,25 +14,9 @@ module RuboCop
             super
           end
 
-          # Inserts new code before the given source range.
-          #
-          # @param [Parser::Source::Range, Rubocop::AST::Node] range or node
-          # @param [String] content
-          def insert_before(node_or_range, content)
-            return super if @v1_support
-
-            range = to_range(node_or_range)
-            # TODO: Fix Cops using bad ranges instead
-            if range.end_pos > @source_buffer.source.size
-              range = range.with(end_pos: @source_buffer.source.size)
-            end
-            super(range, content)
-          end
-
           private
 
           def fix_source(source)
-            @v1_support = source.is_a?(Cop) && source.class.v1_support?
             return source unless source.is_a?(Cop) && source.processed_source.nil?
 
             # warn "Calling add_offense on a cop that doesn't have a processed buffer is deprecated"
@@ -87,10 +71,6 @@ module RuboCop
             base.extend ClassMethods
           end
 
-          def _new_corrector
-            ::RuboCop::Cop::Corrector.new(self) if processed_source
-          end
-
           # Class methods.
           module ClassMethods
             def v1_support?
@@ -104,20 +84,7 @@ module RuboCop
 
           private
 
-          def emulate_v0_callsequence(corrector)
-            lambda = correction_lambda
-            yield corrector if block_given?
-            if corrector && !corrector.empty?
-              raise 'Your cop must call `self.support_autocorrect = true`'
-            end
-
-            begin
-              lambda.call(corrector) if lambda # rubocop:disable Style/SafeNavigation
-            rescue ::Parser::ClobberingError
-              # ignore
-            end
-          end
-
+          # Override Base
           def callback_argument(_range)
             return super if self.class.v1_support?
 
@@ -127,10 +94,21 @@ module RuboCop
           def apply_correction(corrector)
             return super if self.class.v1_support?
 
-            begin
-              current_corrector.merge!(corrector) if corrector
-            rescue ::Parser::ClobberingError
-              # ignore
+            suppress_clobbering { super }
+          end
+
+          # Just for legacy
+          def emulate_v0_callsequence(corrector)
+            lambda = correction_lambda
+            yield corrector if block_given?
+            if corrector && !corrector.empty?
+              raise 'Your cop must call `self.support_autocorrect = true`'
+            end
+
+            if lambda
+              suppress_clobbering do
+                lambda.call(corrector)
+              end
             end
           end
 
@@ -147,6 +125,12 @@ module RuboCop
             yield unless @corrected_nodes.key?(node)
           ensure
             @corrected_nodes[node] = true
+          end
+
+          def suppress_clobbering
+            yield
+          rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
+            # ignore Clobbering errors
           end
         end
       end

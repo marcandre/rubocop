@@ -50,9 +50,9 @@ module RuboCop
         module Cop
           def corrections
             # warn 'Cop#corrections is deprecated' TODO
-            return [] unless @corrector
+            return [] unless current_corrector
 
-            @corrector.corrections
+            CorrectionsProxy.new(current_corrector)
           end
         end
 
