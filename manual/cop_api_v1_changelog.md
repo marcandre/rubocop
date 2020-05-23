@@ -5,7 +5,7 @@
 Your custom cops should continue to work in v1.
 Nevertheless it is suggested that you tweak them to use the v1 API by following the following steps:
 
-1) Your class should call `self.support_autocorrect = <true or false>`
+1) Your class should inherit from `RuboCop::Cop::Base` instead of `RuboCop::Cop::Cop`.
 
 2) Locate your calls to `add_offense` and make sure that you pass as the first argument either a `AST::Node`, a `::Parser::Source::Comment` or a `::Parser::Source::Range`, and no `location:` named parameter
 
@@ -13,27 +13,28 @@ Nevertheless it is suggested that you tweak them to use the v1 API by following 
 
 ```
 # Before
-class MySillyCop < Cop
-  def on_send(node)
-    if node.method_name == :+
-      add_offense(node, location: :selector, message: "Wrap all +")
+    class MySillyCop < Cop
+      def on_send(node)
+        if node.method_name == :+
+          add_offense(node, location: :selector, message: "Wrap all +")
+        end
+      end
     end
-  end
 
 # After
-class MySillyCop < RuboCop::Cop::Cop
-  self.support_autocorrect = false
-
-  def on_send(node)
-    if node.method_name == :+
-      add_offense(node.loc.selector, message: "Wrap all +")
+    class MySillyCop < Base
+      def on_send(node)
+        if node.method_name == :+
+          add_offense(node.loc.selector, message: "Wrap all +")
+        end
+      end
     end
-  end
-end
 ```
 
 
 3) If your class support autocorrection
+
+Your class must `extend Autocorrector`
 
 The `corrector` is now yielded from `add_offense`. Move the code of your method `auto_correct` in that block and do not wrap your correction in a lambda.
 
@@ -41,34 +42,34 @@ The `corrector` is now yielded from `add_offense`. Move the code of your method 
 
 ```
 # Before
-class MySillyCorrectingCop < Cop
-  def on_send(node)
-    if node.method_name == :-
-      add_offense(node, location: :selector, message: 'Be positive')
-    end
-  end
+    class MySillyCorrectingCop < Cop
+      def on_send(node)
+        if node.method_name == :-
+          add_offense(node, location: :selector, message: 'Be positive')
+        end
+      end
 
-  def auto_correct(node)
-    lambda do |corrector|
-      corrector.replace(node.loc.selector, '+')
+      def auto_correct(node)
+        lambda do |corrector|
+          corrector.replace(node.loc.selector, '+')
+        end
+      end
     end
-  end
-end
 ```
 
 ```
 # After
-class MySillyCorrectingCop < RuboCop::Cop::Cop
-  self.support_autocorrect = true
+    class MySillyCorrectingCop < Base
+      extend Autocorrector
 
-  def on_send(node)
-    if node.method_name == :+
-      add_offense(node.loc.selector, message: 'Be positive') do |corrector|
-        corrector.replace(node.loc.selector, '+')
+      def on_send(node)
+        if node.method_name == :+
+          add_offense(node.loc.selector, message: 'Be positive') do |corrector|
+            corrector.replace(node.loc.selector, '+')
+          end
+        end
       end
     end
-  end
-end
 ```
 
 ## Upgrading specs
@@ -78,7 +79,7 @@ It is highly recommended you use `expect_offense` / `expect_no_offense` in your 
 ```
 require 'rubocop/rspec/support'
 
-RSpec.describe MySillyCorrectingCop, :config do
+RSpec.describe RuboCop::Cop::Custom::MySillyCorrectingCop, :config do
   it 'wraps +' do
     expect_offense(<<~RUBY)
       42 + 2 - 2
