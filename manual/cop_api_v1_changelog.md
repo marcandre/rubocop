@@ -181,3 +181,8 @@ Current: class method.
 * `#find_location` is deprecated
 
 * `Correction` is deprecated.
+
+* A few registry access methods were moved from `Cop` to `Registry`:
+  * `Cop.registry` => `Registry.global`
+  * `Cop.all` => `Registry.all`
+  * `Cop.qualified_cop_name` => `Registry.qualified_cop_name`
