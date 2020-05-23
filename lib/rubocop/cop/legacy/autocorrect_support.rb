@@ -87,7 +87,11 @@ module RuboCop
             base.singleton_class.prepend ClassMethods
           end
 
-          # Class methods.
+          def _new_corrector
+            ::RuboCop::Cop::Corrector.new(self) if processed_source
+          end
+
+         # Class methods.
           module ClassMethods
             def v1_support?
               false

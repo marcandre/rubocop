@@ -271,7 +271,7 @@ module RuboCop
       end
 
       def _new_corrector
-        Corrector.new(self) if processed_source
+        Rewriter.new(self) if processed_source
       end
 
       def _range_from_node_or_range(node_or_range)

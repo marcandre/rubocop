@@ -10,10 +10,7 @@ module RuboCop
     # Important!
     # The nodes modified by the corrections should be part of the
     # AST of the source_buffer.
-    class Corrector < ::Parser::Source::TreeRewriter
-      prepend Legacy::AutocorrectSupport::Corrector
-      prepend Legacy::CorrectionsSupport::Corrector
-
+    class Rewriter < ::Parser::Source::TreeRewriter
       # @param source [Parser::Source::Buffer, or anything
       #                leading to one via `(processed_source.)buffer`]
       #
@@ -112,6 +109,11 @@ module RuboCop
               " is not current #{@source_buffer.object_id} " \
               "name:#{@source_buffer.name.inspect} under investigation"
       end
+    end
+
+    class Corrector < Rewriter
+      include Legacy::AutocorrectSupport::Corrector
+      include Legacy::CorrectionsSupport::Corrector
     end
   end
 end
