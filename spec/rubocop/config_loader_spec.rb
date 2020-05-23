@@ -528,8 +528,8 @@ RSpec.describe RuboCop::ConfigLoader do
 
     context 'when a third party require defines a new gem' do
       before do
-        allow(RuboCop::Cop::Cop)
-          .to receive(:registry)
+        allow(RuboCop::Cop::Registry)
+          .to receive(:global)
           .and_return(
             RuboCop::Cop::Registry.new(RuboCop::Cop::Cop.registry.cops)
           )

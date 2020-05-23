@@ -191,6 +191,20 @@ module RuboCop
         @cops_by_cop_name[cop_name].first
       end
 
+      @global = new
+
+      class << self
+        attr_reader :global
+      end
+
+      def self.all
+        global.without_department(:Test).cops
+      end
+
+      def self.qualified_cop_name(name, origin)
+        global.qualified_cop_name(name, origin)
+      end
+
       private
 
       def with(cops)

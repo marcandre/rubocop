@@ -12,25 +12,22 @@ module RuboCop
       include Legacy::AutocorrectSupport::Cop
       include Legacy::CorrectionsSupport::Cop
 
-      # Global Registry
-      @registry = Registry.new
+      ### Deprecated registry access
 
-      class << self
-        attr_reader :registry
+      # Deprecated. Use Registry.global
+      def self.registry
+        Registry.global
       end
 
+      # Deprecated. Use Registry.all
       def self.all
-        registry.without_department(:Test).cops
+        Registry.all
       end
 
+      # Deprecated. Use Registry.qualified_cop_name
       def self.qualified_cop_name(name, origin)
-        registry.qualified_cop_name(name, origin)
+        Registry.qualified_cop_name(name, origin)
       end
-
-    end
-
-    def Base.inherited(subclass)
-      Cop.registry.enlist(subclass)
     end
   end
 end

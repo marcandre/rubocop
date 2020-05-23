@@ -224,6 +224,10 @@ module RuboCop
         false
       end
 
+      def self.inherited(subclass)
+        Registry.global.enlist(subclass) unless subclass == ::RuboCop::Cop::Cop
+      end
+
       private
 
       # Layer for legacy/autocorrect_support
