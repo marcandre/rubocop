@@ -9,7 +9,6 @@ module RuboCop
     # Use Cop::Base instead
     # See manual/cop_api_v1_changelog.md
     class Cop < Base
-
       # Deprecated
       Correction = Struct.new(:lambda, :node, :cop) do
         def call(corrector)
@@ -21,6 +20,7 @@ module RuboCop
         end
       end
 
+      # rubocop:disable Metrics/MethodLength
       def add_offense(node_or_range, location: :expression, message: nil, severity: nil, &block)
         if self.class.v1_support?
           unless location == :expression
@@ -40,6 +40,7 @@ module RuboCop
           end
         end
       end
+      # rubocop:enable Metrics/MethodLength
 
       def find_location(node, loc)
         warn 'deprecated' if self.class.v1_support?
@@ -108,10 +109,10 @@ module RuboCop
           raise 'Your cop must call `self.support_autocorrect = true`'
         end
 
-        if lambda
-          suppress_clobbering do
-            lambda.call(corrector)
-          end
+        return unless lambda
+
+        suppress_clobbering do
+          lambda.call(corrector)
         end
       end
 
@@ -135,7 +136,6 @@ module RuboCop
       rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
         # ignore Clobbering errors
       end
-
     end
   end
 end

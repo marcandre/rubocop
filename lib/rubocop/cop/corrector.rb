@@ -110,6 +110,8 @@ module RuboCop
     end
 
     module Legacy
+      # Legacy Corrector for v0 API support.
+      # See manual/cop_api_v1_changelog.md
       class Corrector < Rewriter
         # Support legacy second argument
         def initialize(source, corr = [])

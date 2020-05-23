@@ -76,7 +76,7 @@ module RuboCop
       def processed_source=(processed_source)
         @offenses = []
         @processed_source = processed_source
-        @corrector = nil
+        @current_corrector = nil
       end
 
       def join_force?(_force_class)
@@ -236,7 +236,7 @@ module RuboCop
       end
 
       def current_corrector
-        @corrector ||= Rewriter.new(self)
+        @current_corrector ||= Rewriter.new(self)
       end
 
       def apply_correction(corrector)
