@@ -91,7 +91,7 @@ module RuboCop
             ::RuboCop::Cop::Corrector.new(self) if processed_source
           end
 
-         # Class methods.
+          # Class methods.
           module ClassMethods
             def v1_support?
               false
