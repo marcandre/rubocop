@@ -44,39 +44,6 @@ module RuboCop
           # ignore Clobbering errors
         end
       end
-
-      module CorrectionsSupport
-        # Extension for Cop::Cop
-        module Cop
-          def corrections
-            # warn 'Cop#corrections is deprecated' TODO
-            return [] unless current_corrector
-
-            CorrectionsProxy.new(current_corrector)
-          end
-        end
-
-        # Extension for Cop::Corrector
-        module Corrector
-          # Support legacy corrections
-          def initialize(source, corr = [])
-            super(source)
-            if corr.is_a?(CorrectionsProxy)
-              merge!(corr.send(:corrector))
-            else
-              # warn "Corrector.new with corrections is deprecated." unless corr.empty? TODO
-              corr.each do |c|
-                corrections << c
-              end
-            end
-          end
-
-          def corrections
-            # warn "#corrections is deprecated. Open an issue if you have a valid usecase." TODO
-            CorrectionsProxy.new(self)
-          end
-        end
-      end
     end
   end
 end

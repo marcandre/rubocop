@@ -230,7 +230,7 @@ module RuboCop
 
       private
 
-      # Layer for legacy/autocorrect_support
+      # Layer for Cop::Cop
       def callback_argument(range)
         range
       end
@@ -243,6 +243,7 @@ module RuboCop
         current_corrector.merge!(corrector) if corrector
       end
 
+      # Other private methods
       def range_from_node_or_range(node_or_range)
         if node_or_range.respond_to?(:loc)
           node_or_range.loc.expression

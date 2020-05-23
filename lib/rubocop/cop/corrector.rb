@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'legacy/corrections_support'
-
 module RuboCop
   module Cop
     # This class takes a source buffer and rewrite its source
@@ -111,9 +109,28 @@ module RuboCop
       end
     end
 
-    class Corrector < Rewriter
-      include Legacy::AutocorrectSupport::Corrector
-      include Legacy::CorrectionsSupport::Corrector
+    module Legacy
+      class Corrector < Rewriter
+        # Support legacy second argument
+        def initialize(source, corr = [])
+          super(source)
+          if corr.is_a?(CorrectionsProxy)
+            merge!(corr.send(:corrector))
+          else
+            # warn "Corrector.new with corrections is deprecated." unless corr.empty? TODO
+            corr.each do |c|
+              corrections << c
+            end
+          end
+        end
+
+        def corrections
+          # warn "#corrections is deprecated. Open an issue if you have a valid usecase." TODO
+          CorrectionsProxy.new(self)
+        end
+      end
     end
+
+    Corrector = Legacy::Corrector # for the time being
   end
 end
