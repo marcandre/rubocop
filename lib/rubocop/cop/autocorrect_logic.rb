@@ -77,14 +77,14 @@ module RuboCop
       end
 
       def disable_offense_at_end_of_line(range, eol_comment)
-        Rewriter.new(self).insert_after(range, eol_comment)
+        Corrector.new(self).insert_after(range, eol_comment)
       end
 
       def disable_offense_before_and_after(range_by_lines)
         range_with_newline = range_by_lines.resize(range_by_lines.size + 1)
         leading_whitespace = range_by_lines.source_line[/^\s*/]
 
-        Rewriter.new(self).wrap(
+        Corrector.new(self).wrap(
           range_with_newline,
           "#{leading_whitespace}# rubocop:todo #{cop_name}\n",
           "#{leading_whitespace}# rubocop:enable #{cop_name}\n"

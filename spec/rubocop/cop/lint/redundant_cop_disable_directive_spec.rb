@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
+require 'rubocop/cop/legacy/corrector'
+
 RSpec.describe RuboCop::Cop::Lint::RedundantCopDisableDirective, :config do
   describe '.check' do
     let(:cop_options) { { auto_correct: true } }
     let(:comments) { processed_source.comments }
     let(:corrected_source) do
-      RuboCop::Cop::Corrector
+      # This acts as a basic spec for Legacy::Corrector
+      # Do not modernize
+      RuboCop::Cop::Legacy::Corrector
         .new(processed_source.buffer, cop.corrections)
         .rewrite
     end

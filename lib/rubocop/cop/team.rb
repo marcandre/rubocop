@@ -164,7 +164,7 @@ module RuboCop
       end
 
       def autocorrect_all_cops(buffer, cops)
-        corrector = Rewriter.new(buffer)
+        corrector = Corrector.new(buffer)
 
         collate_corrections(corrector, cops)
 

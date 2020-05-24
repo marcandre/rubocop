@@ -119,7 +119,7 @@ module RuboCop
         status = correction_strategy
 
         if block_given?
-          corrector = Rewriter.new(self)
+          corrector = Corrector.new(self)
           yield corrector
         end
 
@@ -220,7 +220,7 @@ module RuboCop
       end
 
       def current_corrector
-        @current_corrector ||= Rewriter.new(self)
+        @current_corrector ||= Corrector.new(self)
       end
 
       private

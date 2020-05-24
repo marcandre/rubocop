@@ -8,7 +8,7 @@ module RuboCop
     # Important!
     # The nodes modified by the corrections should be part of the
     # AST of the source_buffer.
-    class Rewriter < ::Parser::Source::TreeRewriter
+    class Corrector < ::Parser::Source::TreeRewriter
       # @param source [Parser::Source::Buffer, or anything
       #                leading to one via `(processed_source.)buffer`]
       #
@@ -108,31 +108,5 @@ module RuboCop
               "name:#{@source_buffer.name.inspect} under investigation"
       end
     end
-
-    module Legacy
-      # Legacy Corrector for v0 API support.
-      # See manual/cop_api_v1_changelog.md
-      class Corrector < Rewriter
-        # Support legacy second argument
-        def initialize(source, corr = [])
-          super(source)
-          if corr.is_a?(CorrectionsProxy)
-            merge!(corr.send(:corrector))
-          else
-            # warn "Corrector.new with corrections is deprecated." unless corr.empty? TODO
-            corr.each do |c|
-              corrections << c
-            end
-          end
-        end
-
-        def corrections
-          # warn "#corrections is deprecated. Open an issue if you have a valid usecase." TODO
-          CorrectionsProxy.new(self)
-        end
-      end
-    end
-
-    Corrector = Legacy::Corrector # for the time being
   end
 end
