@@ -211,10 +211,6 @@ module RuboCop
         nil
       end
 
-      def self.v1_support?
-        true
-      end
-
       def self.support_autocorrect?
         false
       end
