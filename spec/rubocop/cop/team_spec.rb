@@ -284,56 +284,6 @@ RSpec.describe RuboCop::Cop::Team do
     end
   end
 
-  describe '#forces' do
-    subject(:forces) { team.forces }
-
-    let(:cop_classes) { RuboCop::Cop::Cop.registry }
-
-    it 'returns force instances' do
-      expect(forces.empty?).to be(false)
-
-      forces.each do |force|
-        expect(force.is_a?(RuboCop::Cop::Force)).to be(true)
-      end
-    end
-
-    context 'when a cop joined a force' do
-      let(:cop_classes) do
-        RuboCop::Cop::Registry.new([RuboCop::Cop::Lint::UselessAssignment])
-      end
-
-      it 'returns the force' do
-        expect(forces.size).to eq(1)
-        expect(forces.first.is_a?(RuboCop::Cop::VariableForce)).to be(true)
-      end
-    end
-
-    context 'when multiple cops joined a same force' do
-      let(:cop_classes) do
-        RuboCop::Cop::Registry.new(
-          [
-            RuboCop::Cop::Lint::UselessAssignment,
-            RuboCop::Cop::Lint::ShadowingOuterLocalVariable
-          ]
-        )
-      end
-
-      it 'returns only one force instance' do
-        expect(forces.size).to eq(1)
-      end
-    end
-
-    context 'when no cops joined force' do
-      let(:cop_classes) do
-        RuboCop::Cop::Registry.new([RuboCop::Cop::Style::For])
-      end
-
-      it 'returns nothing' do
-        expect(forces.empty?).to be(true)
-      end
-    end
-  end
-
   describe '#external_dependency_checksum' do
     let(:cop_classes) { RuboCop::Cop::Registry.new }
 

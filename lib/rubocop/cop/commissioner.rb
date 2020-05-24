@@ -9,9 +9,8 @@ module RuboCop
 
       attr_reader :errors
 
-      def initialize(cops, forces = [], options = {})
+      def initialize(cops, options = {})
         @cops = cops
-        @forces = forces
         @options = options
         @callbacks = {}
 
@@ -38,12 +37,22 @@ module RuboCop
         reset_errors
         @cops_on_duty = roundup_cops(processed_source.file_path)
         reset_callbacks
+        forces_on_duty = Commissioner.forces_for(@cops_on_duty)
         prepare(processed_source)
         invoke_custom_processing(@cops_on_duty, processed_source)
-        invoke_custom_processing(@forces, processed_source)
+        invoke_custom_processing(forces_on_duty, processed_source)
         walk(processed_source.ast) unless processed_source.blank?
         invoke_custom_post_walk_processing(@cops_on_duty, processed_source)
         @cops_on_duty.flat_map(&:offenses)
+      end
+
+      def self.forces_for(cops)
+        Force.all.each_with_object([]) do |force_class, forces|
+          joining_cops = cops.select { |cop| cop.join_force?(force_class) }
+          next if joining_cops.empty?
+
+          forces << force_class.new(joining_cops)
+        end
       end
 
       private

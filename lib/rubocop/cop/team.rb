@@ -52,19 +52,6 @@ module RuboCop
         end
       end
 
-      def forces
-        @forces ||= forces_for(cops)
-      end
-
-      def forces_for(cops)
-        Force.all.each_with_object([]) do |force_class, forces|
-          joining_cops = cops.select { |cop| cop.join_force?(force_class) }
-          next if joining_cops.empty?
-
-          forces << force_class.new(joining_cops)
-        end
-      end
-
       def autocorrect(buffer, cops)
         @updated_source_file = false
         return unless autocorrect?
@@ -120,7 +107,7 @@ module RuboCop
       def investigate(cops, processed_source)
         return Investigation.new([], {}) if cops.empty?
 
-        commissioner = Commissioner.new(cops, forces_for(cops))
+        commissioner = Commissioner.new(cops)
         offenses = commissioner.investigate(processed_source)
 
         Investigation.new(offenses, commissioner.errors)

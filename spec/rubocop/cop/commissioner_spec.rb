@@ -8,12 +8,11 @@ RSpec.describe RuboCop::Cop::Commissioner do
                                 excluded_file?: false).as_null_object
       # rubocop:enable RSpec/VerifiedDoubles
     end
-    let(:force) { instance_double(RuboCop::Cop::Force).as_null_object }
 
     it 'returns all offenses found by the cops' do
       allow(cop).to receive(:offenses).and_return([1])
 
-      commissioner = described_class.new([cop], [])
+      commissioner = described_class.new([cop])
       source = ''
       processed_source = parse_source(source)
 
@@ -30,7 +29,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
                                                    excluded_file?: false)
         cops.each(&:as_null_object)
 
-        commissioner = described_class.new(cops, [])
+        commissioner = described_class.new(cops)
         source = ''
         processed_source = parse_source(source)
 
@@ -59,7 +58,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
     it 'traverses the AST and invoke cops specific callbacks' do
       expect(cop).to receive(:on_def).once
 
-      commissioner = described_class.new([cop], [])
+      commissioner = described_class.new([cop])
       source = <<~RUBY
         def method
         1
@@ -70,23 +69,33 @@ RSpec.describe RuboCop::Cop::Commissioner do
       commissioner.investigate(processed_source)
     end
 
-    it 'passes the input params to all cops/forces that implement their own' \
-       ' #investigate method' do
-      source = ''
-      processed_source = parse_source(source)
+    context 'with a cop joining a force' do
+      before do
+        allow(force_class).to receive(:new).and_return(force)
+        allow(RuboCop::Cop::Force).to receive(:all).and_return([force_class])
+        allow(cop).to receive(:join_force?).with(force_class).and_return(true)
+      end
 
-      expect(cop).to receive(:investigate).with(processed_source)
-      expect(force).to receive(:investigate).with(processed_source)
+      let(:force_class) { RuboCop::Cop::Force }
+      let(:force) { instance_double(force_class).as_null_object }
 
-      commissioner = described_class.new([cop], [force])
+      it 'passes the input params to all cops/forces that implement their own' \
+         ' #investigate method' do
+        source = ''
+        processed_source = parse_source(source)
+        expect(cop).to receive(:investigate).with(processed_source)
+        expect(force).to receive(:investigate).with(processed_source)
 
-      commissioner.investigate(processed_source)
+        commissioner = described_class.new([cop])
+
+        commissioner.investigate(processed_source)
+      end
     end
 
     it 'stores all errors raised by the cops' do
       allow(cop).to receive(:on_int) { raise RuntimeError }
 
-      commissioner = described_class.new([cop], [])
+      commissioner = described_class.new([cop])
       source = <<~RUBY
         def method
         1
@@ -108,7 +117,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
       it 're-raises the exception received while processing' do
         allow(cop).to receive(:on_int) { raise RuntimeError }
 
-        commissioner = described_class.new([cop], [], raise_error: true)
+        commissioner = described_class.new([cop], raise_error: true)
         source = <<~RUBY
           def method
           1
@@ -119,6 +128,57 @@ RSpec.describe RuboCop::Cop::Commissioner do
         expect do
           commissioner.investigate(processed_source)
         end.to raise_error(RuntimeError)
+      end
+    end
+  end
+
+  describe '.forces_for' do
+    subject(:forces) { described_class.forces_for(cops) }
+
+    let(:cop_classes) { RuboCop::Cop::Cop.registry }
+    let(:cops) { cop_classes.cops.map(&:new) }
+
+    it 'returns force instances' do
+      expect(forces.empty?).to be(false)
+
+      forces.each do |force|
+        expect(force.is_a?(RuboCop::Cop::Force)).to be(true)
+      end
+    end
+
+    context 'when a cop joined a force' do
+      let(:cop_classes) do
+        RuboCop::Cop::Registry.new([RuboCop::Cop::Lint::UselessAssignment])
+      end
+
+      it 'returns the force' do
+        expect(forces.size).to eq(1)
+        expect(forces.first.is_a?(RuboCop::Cop::VariableForce)).to be(true)
+      end
+    end
+
+    context 'when multiple cops joined a same force' do
+      let(:cop_classes) do
+        RuboCop::Cop::Registry.new(
+          [
+            RuboCop::Cop::Lint::UselessAssignment,
+            RuboCop::Cop::Lint::ShadowingOuterLocalVariable
+          ]
+        )
+      end
+
+      it 'returns only one force instance' do
+        expect(forces.size).to eq(1)
+      end
+    end
+
+    context 'when no cops joined force' do
+      let(:cop_classes) do
+        RuboCop::Cop::Registry.new([RuboCop::Cop::Style::For])
+      end
+
+      it 'returns nothing' do
+        expect(forces.empty?).to be(true)
       end
     end
   end

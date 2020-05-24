@@ -75,7 +75,7 @@ task :bench_cop, %i[cop srcpath times] do |_task, args|
   puts 'Finished parsing source, testing inspection...'
   puts(Benchmark.measure do
     iterations.times do
-      commissioner = Cop::Commissioner.new([cop], [])
+      commissioner = Cop::Commissioner.new([cop])
       srcs.each { |src| commissioner.investigate(src) }
     end
   end)
