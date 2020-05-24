@@ -9,8 +9,6 @@ module RuboCop
         debug: false
       }.freeze
 
-      Investigation = Struct.new(:offenses, :errors)
-
       attr_reader :errors, :warnings, :updated_source_file
 
       alias updated_source_file? updated_source_file
@@ -87,28 +85,27 @@ module RuboCop
         # run the other cops when no corrections are left
         autocorrect_cops, other_cops = cops.partition(&:autocorrect?)
 
-        autocorrect = investigate(autocorrect_cops, processed_source)
+        autocorrect_report = investigate(autocorrect_cops, processed_source)
 
-        if autocorrect(processed_source.buffer, autocorrect_cops)
+        if autocorrect(processed_source.buffer, autocorrect_report.cops)
           # We corrected some errors. Another round of inspection will be
           # done, and any other offenses will be caught then, so we don't
           # need to continue.
-          return autocorrect.offenses
+          return autocorrect_report.offenses
         end
 
-        other = investigate(other_cops, processed_source)
+        other_report = investigate(other_cops, processed_source)
 
-        errors = [*autocorrect.errors, *other.errors]
+        errors = [*autocorrect_report.errors, *other_report.errors]
         process_errors(processed_source.path, errors)
 
-        autocorrect.offenses.concat(other.offenses)
+        autocorrect_report.offenses.concat(other_report.offenses)
       end
 
+      # @return [Commissioner::Report]
       def investigate(cops, processed_source)
         commissioner = Commissioner.new(cops)
-        offenses = commissioner.investigate(processed_source)
-
-        Investigation.new(offenses, commissioner.errors)
+        commissioner.investigate(processed_source)
       end
 
       def autocorrect_all_cops(buffer, cops)

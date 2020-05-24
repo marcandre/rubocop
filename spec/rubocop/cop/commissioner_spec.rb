@@ -2,7 +2,7 @@
 
 RSpec.describe RuboCop::Cop::Commissioner do
   describe '#investigate' do
-    subject(:offenses) { do_investigate.call }
+    subject(:offenses) { do_investigate.call.offenses }
 
     let(:cop) do
       # rubocop:disable RSpec/VerifiedDoubles
@@ -13,7 +13,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
     let(:cops) { [cop] }
     let(:options) { {} }
     let(:commissioner) { described_class.new(cops, **options) }
-    let(:errors) { commissioner.errors }
+    let(:errors) { do_investigate.call.errors }
     let(:source) { '' }
     let(:processed_source) { parse_source(source, 'file.rb') }
     let(:do_investigate) { ->(source = processed_source) { commissioner.investigate(source) } }
@@ -50,9 +50,9 @@ RSpec.describe RuboCop::Cop::Commissioner do
       it 'still processes the cop for other files later' do
         expect(offenses).to eq %w[]
 
-        next_offenses = do_investigate.call(parse_source(source, 'other_file.rb'))
+        report = do_investigate.call(parse_source(source, 'other_file.rb'))
 
-        expect(next_offenses).to eq %w[bar]
+        expect(report.offenses).to eq %w[bar]
       end
     end
 

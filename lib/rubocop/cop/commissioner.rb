@@ -7,14 +7,16 @@ module RuboCop
     class Commissioner
       include RuboCop::AST::Traversal
 
-      attr_reader :errors
+      # The result of an investigation
+      Report = Struct.new(:processed_source, :cops, :forces, :errors) do
+        def offenses
+          @offenses ||= cops.flat_map(&:offenses)
+        end
+      end
 
       def initialize(cops, options = {})
         @cops = cops
         @options = options
-        @callbacks = {}
-
-        reset_errors
       end
 
       # Create methods like :on_send, :on_super, etc. They will be called
@@ -35,17 +37,17 @@ module RuboCop
 
       def investigate(processed_source)
         reset_errors
-        @cops_on_duty = roundup_cops(processed_source.file_path)
-        return [] if @cops_on_duty.empty?
-
         reset_callbacks
+        @cops_on_duty = roundup_cops(processed_source.file_path)
         forces_on_duty = Commissioner.forces_for(@cops_on_duty)
-        prepare(processed_source)
-        invoke_custom_processing(@cops_on_duty, processed_source)
-        invoke_custom_processing(forces_on_duty, processed_source)
-        walk(processed_source.ast) unless processed_source.blank?
-        invoke_custom_post_walk_processing(@cops_on_duty, processed_source)
-        @cops_on_duty.flat_map(&:offenses)
+        unless @cops_on_duty.empty?
+          prepare(processed_source)
+          invoke_custom_processing(@cops_on_duty, processed_source)
+          invoke_custom_processing(forces_on_duty, processed_source)
+          walk(processed_source.ast) unless processed_source.blank?
+          invoke_custom_post_walk_processing(@cops_on_duty, processed_source)
+        end
+        Report.new(processed_source, @cops_on_duty, forces_on_duty, @errors)
       end
 
       def self.forces_for(cops)
@@ -95,7 +97,7 @@ module RuboCop
       end
 
       def reset_callbacks
-        @callbacks.clear
+        @callbacks = {}
       end
 
       # TODO: Bad design.
