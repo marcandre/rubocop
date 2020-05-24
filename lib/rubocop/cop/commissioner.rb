@@ -36,20 +36,20 @@ module RuboCop
 
       def investigate(processed_source)
         reset_errors
-        remove_irrelevant_cops(processed_source.file_path)
+        @cops_on_duty = roundup_cops(processed_source.file_path)
         reset_callbacks
         prepare(processed_source)
-        invoke_custom_processing(@cops, processed_source)
+        invoke_custom_processing(@cops_on_duty, processed_source)
         invoke_custom_processing(@forces, processed_source)
         walk(processed_source.ast) unless processed_source.blank?
-        invoke_custom_post_walk_processing(@cops, processed_source)
-        @cops.flat_map(&:offenses)
+        invoke_custom_post_walk_processing(@cops_on_duty, processed_source)
+        @cops_on_duty.flat_map(&:offenses)
       end
 
       private
 
       def trigger_responding_cops(callback, node)
-        @callbacks[callback] ||= @cops.select do |cop|
+        @callbacks[callback] ||= @cops_on_duty.select do |cop|
           cop.respond_to?(callback)
         end
         @callbacks[callback].each do |cop|
@@ -63,8 +63,8 @@ module RuboCop
         @errors = []
       end
 
-      def remove_irrelevant_cops(filename)
-        @cops.reject! do |cop|
+      def roundup_cops(filename)
+        @cops.reject do |cop|
           cop.excluded_file?(filename) ||
             !support_target_ruby_version?(cop) ||
             !support_target_rails_version?(cop)

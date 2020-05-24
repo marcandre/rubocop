@@ -36,6 +36,24 @@ RSpec.describe RuboCop::Cop::Commissioner do
 
         expect(commissioner.investigate(processed_source)).to eq %w[foo baz]
       end
+
+      it 'still processes the cop for other files later' do
+        cop = instance_double(RuboCop::Cop::Cop, offenses: %w[bar])
+        allow(cop).to receive(:excluded_file?) do |arg|
+          arg == 'file_a.rb'
+        end
+        cop.as_null_object
+
+        commissioner = described_class.new([cop])
+        source = ''
+        processed_source = parse_source(source, 'file_a.rb')
+        expect(commissioner.investigate(processed_source)).to eq %w[]
+
+        processed_source = parse_source(source, 'file_b.rb')
+        commissioner.investigate(processed_source)
+
+        expect(commissioner.investigate(processed_source)).to eq %w[bar]
+      end
     end
 
     it 'traverses the AST and invoke cops specific callbacks' do
