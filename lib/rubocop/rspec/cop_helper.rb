@@ -43,9 +43,7 @@ module CopHelper
     processed_source = parse_source(source, file)
     _investigate(cop, processed_source)
 
-    corrector =
-      RuboCop::Cop::Corrector.new(processed_source.buffer, cop.corrections)
-    corrector.rewrite
+    cop.current_corrector.rewrite
   end
 
   def autocorrect_source_with_loop(source, file = nil)
@@ -73,7 +71,7 @@ module RuboCop
   module Cop
     # Monkey-patch Cop for tests to provide easy access to messages and
     # highlights.
-    class Cop
+    class Base
       def messages
         offenses.sort.map(&:message)
       end

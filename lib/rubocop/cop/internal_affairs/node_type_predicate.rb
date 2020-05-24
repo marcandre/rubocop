@@ -13,7 +13,7 @@ module RuboCop
       #   # good
       #   node.send_type?
       #
-      class NodeTypePredicate < Cop
+      class NodeTypePredicate < Base
         extend Autocorrector
 
         MSG = 'Use `#%<type>s_type?` to check node type.'

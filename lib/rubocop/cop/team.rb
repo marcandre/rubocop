@@ -164,11 +164,11 @@ module RuboCop
       end
 
       def autocorrect_all_cops(buffer, cops)
-        corrector = Corrector.new(buffer)
+        corrector = Rewriter.new(buffer)
 
         collate_corrections(corrector, cops)
 
-        if !corrector.corrections.empty?
+        if !corrector.empty?
           corrector.rewrite
         else
           buffer.source
@@ -179,12 +179,20 @@ module RuboCop
         skips = Set.new
 
         cops.each do |cop|
-          next if cop.corrections.empty?
+          next if cop.current_corrector.empty?
           next if skips.include?(cop.class)
 
-          corrector.corrections.concat(cop.corrections)
+          suppress_clobbering do
+            corrector.merge!(cop.current_corrector)
+          end
           skips.merge(cop.class.autocorrect_incompatible_with)
         end
+      end
+
+      def suppress_clobbering
+        yield
+      rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
+        # ignore Clobbering errors
       end
 
       def validate_config

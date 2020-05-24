@@ -217,7 +217,7 @@ RSpec.describe RuboCop::Cop::Team do
 
     it 'returns cop instances' do
       expect(cops.empty?).to be(false)
-      expect(cops.all? { |c| c.is_a?(RuboCop::Cop::Cop) }).to be_truthy
+      expect(cops.all? { |c| c.is_a?(RuboCop::Cop::Base) }).to be_truthy
     end
 
     context 'when only some cop classes are passed to .new' do

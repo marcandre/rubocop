@@ -16,7 +16,7 @@ module RuboCop
       #
       #   # Good
       #   raise 'message'
-      class RedundantException < Cop
+      class RedundantException < Base
         extend Autocorrector
 
         MSG_1 = 'Redundant `RuntimeError` argument can be removed.'
