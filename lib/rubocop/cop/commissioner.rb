@@ -36,6 +36,8 @@ module RuboCop
       def investigate(processed_source)
         reset_errors
         @cops_on_duty = roundup_cops(processed_source.file_path)
+        return [] if @cops_on_duty.empty?
+
         reset_callbacks
         forces_on_duty = Commissioner.forces_for(@cops_on_duty)
         prepare(processed_source)

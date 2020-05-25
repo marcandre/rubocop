@@ -105,8 +105,6 @@ module RuboCop
       end
 
       def investigate(cops, processed_source)
-        return Investigation.new([], {}) if cops.empty?
-
         commissioner = Commissioner.new(cops)
         offenses = commissioner.investigate(processed_source)
 
