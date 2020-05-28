@@ -69,7 +69,7 @@ RSpec.describe RuboCop::Cop::Lint::Syntax do
         offense = offenses.first
         expect(offense.message).to eq('Invalid byte sequence in utf-8.')
         expect(offense.severity).to eq(:fatal)
-        expect(offense.location).to eq(described_class::ERROR_SOURCE_RANGE)
+        expect(offense.location).to eq(RuboCop::Cop::Offense::NO_LOCATION)
       end
 
       context 'with --display-cop-names option' do

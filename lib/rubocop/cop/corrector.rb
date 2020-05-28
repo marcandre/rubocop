@@ -16,6 +16,7 @@ module RuboCop
       def initialize(source)
         source = source.processed_source if source.respond_to?(:processed_source)
         source = source.buffer if source.respond_to?(:buffer)
+        source = source.source_buffer if source.respond_to?(:source_buffer)
 
         unless source.is_a? Parser::Source::Buffer
           raise TypeError, 'Expected argument to lead to a Parser::Source::Buffer ' \

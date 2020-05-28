@@ -81,7 +81,7 @@ module RuboCop
 
           check_no_space(opening_pipe.end_pos, first.begin_pos,
                          'Space before first')
-          check_no_space(last_end_pos_inside_pipes(last.end_pos),
+          check_no_space(last_end_pos_inside_pipes(last),
                          closing_pipe.begin_pos, 'Space after last')
         end
 
@@ -102,7 +102,7 @@ module RuboCop
 
         def check_closing_pipe_space(args, closing_pipe)
           last         = args.last.source_range
-          last_end_pos = last_end_pos_inside_pipes(last.end_pos)
+          last_end_pos = last_end_pos_inside_pipes(last)
 
           check_space(last_end_pos, closing_pipe.begin_pos, last,
                       'after last block parameter')
@@ -110,8 +110,9 @@ module RuboCop
                          'Extra space after last')
         end
 
-        def last_end_pos_inside_pipes(pos)
-          processed_source.buffer.source[pos] == ',' ? pos + 1 : pos
+        def last_end_pos_inside_pipes(range)
+          pos = range.end_pos
+          range.source_buffer.source[pos] == ',' ? pos + 1 : pos
         end
 
         def check_each_arg(args)

@@ -7,15 +7,10 @@ module RuboCop
       # provides methods to repack Parser's diagnostics/errors
       # into RuboCop's offenses.
       class Syntax < Cop
-        PseudoSourceRange = Struct.new(:line, :column, :source_line, :begin_pos,
-                                       :end_pos)
-
-        ERROR_SOURCE_RANGE = PseudoSourceRange.new(1, 0, '', 0, 1).freeze
-
         def self.offenses_from_processed_source(processed_source,
                                                 config, options)
           cop = new(config, options)
-          cop.processed_source = processed_source
+          cop.send(:begin_investigation, processed_source)
 
           cop.add_offense_from_error(processed_source.parser_error) if processed_source.parser_error
 
@@ -24,7 +19,7 @@ module RuboCop
                                             processed_source.ruby_version)
           end
 
-          cop.offenses
+          cop.send(:complete_investigation).first
         end
 
         def add_offense_from_diagnostic(diagnostic, ruby_version)
@@ -39,10 +34,7 @@ module RuboCop
 
         def add_offense_from_error(error)
           message = beautify_message(error.message)
-          add_offense(nil,
-                      location: ERROR_SOURCE_RANGE,
-                      message: message,
-                      severity: :fatal)
+          add_global_offense(message, severity: :fatal)
         end
 
         private

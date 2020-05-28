@@ -205,6 +205,16 @@ module RuboCop
         global.qualified_cop_name(name, origin)
       end
 
+      # Changes momentarily the global registry
+      # Intended for testing purposes
+      def self.with_temporary_global(temp_global = global.dup)
+        previous = @global
+        @global = temp_global
+        yield
+      ensure
+        @global = previous
+      end
+
       private
 
       def with(cops)

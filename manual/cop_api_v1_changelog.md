@@ -33,7 +33,7 @@ Nevertheless it is suggested that you tweak them to use the v1 API by following 
 ```
 
 
-### If your class support autocorrection
+### If your class supports autocorrection
 
 Your class must `extend Autocorrector`
 
@@ -190,7 +190,15 @@ Both: `Commissionner` will rescue all `StandardError`s during analysis (unless `
 
 *Current:* no second argument; not needed as correctors can be merged.
 
-## Misc
+## Misc API changes
+
+* internal API clarified for Commissioner. It calls `begin_investigation` and received the results in `complete_investigation`.
+
+* New method `add_global_offense` for offenses that are not attached to a location in particular; it's used for Syntax errors only right now.
+
+* `#offenses`: No longer accessible.
+
+* Callbacks `investigate(processed_source)` and `investigate_post_walk(processed_source)` are renamed `on_walk_begin` and `on_walk_end` and don't accept an argument; all `on_` callbacks can rely on `processed_source`.
 
 * `#find_location` is deprecated.
 

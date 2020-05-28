@@ -40,7 +40,7 @@ module RuboCop
 
         def suppress_clobbering
           yield
-        rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
+        rescue ::Parser::ClobberingError
           # ignore Clobbering errors
         end
       end

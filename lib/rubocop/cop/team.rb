@@ -15,7 +15,16 @@ module RuboCop
         debug: false
       }.freeze
 
-      Investigation = Struct.new(:offenses, :errors)
+      Investigation = Struct.new(:cops, :offenses_per_cop, :correctors, :errors) do
+        def offenses
+          @offenses ||= offenses_per_cop.flatten(1)
+        end
+
+        def merge!(report)
+          each_pair { |key, value| value.concat(report[key]) }
+          self
+        end
+      end
 
       attr_reader :errors, :warnings, :updated_source_file, :cops
 
@@ -56,15 +65,24 @@ module RuboCop
         @options[:debug]
       end
 
+      # Deprecated. Use investigate
+      # @return Array<offenses>
       def inspect_file(processed_source)
+        investigate(processed_source).offenses
+      end
+
+      # @return [Investigation]
+      def investigate(processed_source)
         # If we got any syntax errors, return only the syntax offenses.
         unless processed_source.valid_syntax?
-          return Lint::Syntax.offenses_from_processed_source(
+          offenses = Lint::Syntax.offenses_from_processed_source(
             processed_source, @config, @options
           )
+          # TODO: Cleanup
+          return Investigation.new(nil, offenses, [], [])
         end
 
-        offenses(processed_source)
+        investigate_valid_source(processed_source)
       end
 
       def forces
@@ -80,11 +98,11 @@ module RuboCop
         end
       end
 
-      def autocorrect(buffer, cops)
+      def autocorrect(buffer, cops, correctors)
         @updated_source_file = false
         return unless autocorrect?
 
-        new_source = autocorrect_all_cops(buffer, cops)
+        new_source = autocorrect_all_cops(buffer, cops, correctors)
 
         return if new_source == buffer.source
 
@@ -108,7 +126,7 @@ module RuboCop
 
       private
 
-      def offenses(processed_source) # rubocop:disable Metrics/AbcSize
+      def investigate_valid_source(processed_source)
         # The autocorrection process may have to be repeated multiple times
         # until there are no corrections left to perform
         # To speed things up, run auto-correcting cops by themselves, and only
@@ -117,30 +135,29 @@ module RuboCop
 
         autocorrect_cops, other_cops = on_duty.partition(&:autocorrect?)
 
-        autocorrect = investigate(autocorrect_cops, processed_source)
+        report = investigate_partial(autocorrect_cops, processed_source)
 
-        if autocorrect(processed_source.buffer, autocorrect_cops)
+        if autocorrect(processed_source.buffer, report.cops, report.correctors)
           # We corrected some errors. Another round of inspection will be
           # done, and any other offenses will be caught then, so we don't
           # need to continue.
-          return autocorrect.offenses
+          return report
         end
 
-        other = investigate(other_cops, processed_source)
+        report.merge! investigate_partial(other_cops, processed_source)
 
-        errors = [*autocorrect.errors, *other.errors]
-        process_errors(processed_source.path, errors)
+        process_errors(processed_source.path, report.errors)
 
-        autocorrect.offenses.concat(other.offenses)
+        report
       end
 
-      def investigate(cops, processed_source)
-        return Investigation.new([], {}) if cops.empty?
+      def investigate_partial(cops, processed_source)
+        return Investigation.new([], [], [], []) if cops.empty?
 
         commissioner = Commissioner.new(cops, forces_for(cops), @options)
-        offenses = commissioner.investigate(processed_source)
+        offenses, correctors = commissioner.investigate(processed_source)
 
-        Investigation.new(offenses, commissioner.errors)
+        Investigation.new(cops, offenses, correctors, commissioner.errors)
       end
 
       def roundup_relevant_cops(filename)
@@ -163,10 +180,10 @@ module RuboCop
         cop.class.support_target_rails_version?(cop.target_rails_version)
       end
 
-      def autocorrect_all_cops(buffer, cops)
+      def autocorrect_all_cops(buffer, cops, correctors)
         corrector = Corrector.new(buffer)
 
-        collate_corrections(corrector, cops)
+        collate_corrections(corrector, cops, correctors)
 
         if !corrector.empty?
           corrector.rewrite
@@ -175,15 +192,15 @@ module RuboCop
         end
       end
 
-      def collate_corrections(corrector, cops)
+      def collate_corrections(corrector, cops, correctors)
         skips = Set.new
 
-        cops.each do |cop|
-          next if cop.current_corrector.empty?
+        cops.zip(correctors) do |cop, to_merge|
+          next if to_merge.empty?
           next if skips.include?(cop.class)
 
           suppress_clobbering do
-            corrector.merge!(cop.current_corrector)
+            corrector.merge!(to_merge)
           end
           skips.merge(cop.class.autocorrect_incompatible_with)
         end
@@ -191,7 +208,7 @@ module RuboCop
 
       def suppress_clobbering
         yield
-      rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
+      rescue ::Parser::ClobberingError
         # ignore Clobbering errors
       end
 

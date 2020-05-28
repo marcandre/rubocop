@@ -9,6 +9,8 @@ module RuboCop
     # Use Cop::Base instead
     # See manual/cop_api_v1_changelog.md
     class Cop < Base
+      attr_reader :offenses
+
       # Deprecated
       Correction = Struct.new(:lambda, :node, :cop) do
         def call(corrector)
@@ -19,6 +21,7 @@ module RuboCop
           )
         end
       end
+
       def add_offense(node_or_range, location: :expression, message: nil, severity: nil, &block)
         @v0_argument = node_or_range
         range = find_location(node_or_range, location)
@@ -48,9 +51,9 @@ module RuboCop
       # Deprecated
       def corrections
         # warn 'Cop#corrections is deprecated' TODO
-        return [] unless current_corrector
+        return [] unless @last_corrector
 
-        Legacy::CorrectionsProxy.new(current_corrector)
+        Legacy::CorrectionsProxy.new(@last_corrector)
       end
 
       ### Deprecated registry access
@@ -70,7 +73,23 @@ module RuboCop
         Registry.qualified_cop_name(name, origin)
       end
 
+      # Called before all on_... have been called
+      def on_walk_begin
+        investigate(processed_source) if respond_to?(:investigate)
+      end
+
+      # Called after all on_... have been called
+      def on_walk_end
+        investigate_post_walk(processed_source) if respond_to?(:investigate_post_walk)
+      end
+
       private
+
+      def begin_investigation(processed_source)
+        super
+        @offenses = @current_offenses
+        @last_corrector = @current_corrector
+      end
 
       # Override Base
       def callback_argument(_range)
@@ -113,7 +132,7 @@ module RuboCop
 
       def suppress_clobbering
         yield
-      rescue ::Parser::ClobberingError # rubocop:disable Lint/SuppressedException
+      rescue ::Parser::ClobberingError
         # ignore Clobbering errors
       end
     end

@@ -10,18 +10,24 @@ module RuboCop
     #
     # A commissioner object is responsible for traversing the AST and invoking
     # the specific callbacks on each cop.
-    # If a cop needs to do its own processing of the AST or depends on
-    # something else, it should define the `#investigate` method and do
-    # the processing there.
     #
-    # @example
+    # First the callback `on_walk_begin` is called;
+    # if a cop needs to do its own processing of the AST or depends on
+    # something else.
     #
-    #   class CustomCop < Base
-    #     def investigate(processed_source)
-    #       # Do custom processing
-    #     end
-    #   end
-    class Base
+    # Then callbacks like `on_def`, `on_send` (see AST::Traversal) are called
+    # with their respective nodes.
+    #
+    # Finally the callback `on_walk_end` is called.
+    #
+    # Within these callbacks, cops are meant to call `add_offense` or
+    # `add_global_offense`. Use the `processed_source` method to
+    # get the currently processed source being investigated.
+    #
+    # Private methods are not meant for custom cops consumption,
+    # nor are any instance variables.
+    #
+    class Base # rubocop:disable Metrics/ClassLength
       extend RuboCop::AST::Sexp
       extend NodePattern::Macros
       include RuboCop::AST::Sexp
@@ -29,8 +35,7 @@ module RuboCop
       include IgnoredNode
       include AutocorrectLogic
 
-      attr_reader :config, :offenses
-      attr_reader :processed_source
+      attr_reader :config, :processed_source
 
       def self.badge
         @badge ||= Badge.for(name)
@@ -70,22 +75,16 @@ module RuboCop
       def initialize(config = nil, options = nil)
         @config = config || Config.new
         @options = options || { debug: false }
-        self.processed_source = nil
-      end
-
-      def processed_source=(processed_source)
-        @offenses = []
-        @processed_source = processed_source
-        @current_corrector = nil
+        reset_investigation
       end
 
       # Called before all on_... have been called
-      def investigate(processed_source)
+      def on_walk_begin
         # Typically do nothing here
       end
 
       # Called after all on_... have been called
-      def investigate_post_walk(processed_source)
+      def on_walk_end
         # Typically do nothing here
       end
 
@@ -104,11 +103,17 @@ module RuboCop
         self.class::MSG
       end
 
+      def add_global_offense(message = nil, severity: nil)
+        severity = find_severity(nil, severity)
+        message = find_message(nil, message)
+        @current_offenses <<
+          Offense.new(severity, Offense::NO_LOCATION, message, name, :unsupported)
+      end
+
       # Yields a corrector
       #
       def add_offense(node_or_range, message: nil, severity: nil, &block)
         range = range_from_node_or_range(node_or_range)
-
         return if duplicate_location?(range)
 
         range_to_pass = callback_argument(range)
@@ -118,50 +123,7 @@ module RuboCop
 
         status = enabled_line?(range.line) ? correct(range, &block) : :disabled
 
-        @offenses << Offense.new(severity, range, message, name, status)
-      end
-
-      def duplicate_location?(location)
-        @offenses.any? { |o| o.location == location }
-      end
-
-      def correct(range)
-        status = correction_strategy
-
-        if block_given?
-          corrector = Corrector.new(self)
-          yield corrector
-        end
-
-        case status
-        when :corrected_with_todo
-          apply_correction(disable_uncorrectable(range))
-        when :corrected
-          return :uncorrected if corrector.nil? || corrector.empty?
-
-          apply_correction(corrector)
-        end
-        status
-      end
-
-      def correction_strategy
-        return :unsupported unless correctable?
-        return :uncorrected unless autocorrect?
-
-        if self.class.support_autocorrect?
-          :corrected
-        elsif disable_uncorrectable?
-          :corrected_with_todo
-        end
-      end
-
-      def disable_uncorrectable(range)
-        @disabled_lines ||= {}
-        line = range.line
-        return if @disabled_lines.key?(line)
-
-        @disabled_lines[line] = true
-        disable_offense(range)
+        @current_offenses << Offense.new(severity, range, message, name, status)
       end
 
       def config_to_allow_offenses
@@ -229,27 +191,98 @@ module RuboCop
         Registry.global.enlist(subclass) unless subclass == ::RuboCop::Cop::Cop
       end
 
-      def current_corrector
-        @current_corrector ||= Corrector.new(self)
+      ### Make potential errors with previous API more obvious
+
+      def offenses
+        raise 'The offenses are not directly available; ' \
+          'they are returned as the result of the investigation'
       end
 
       private
 
-      # Layer for Cop::Cop
+      ### Reserved for Cop::Cop
+
       def callback_argument(range)
         range
       end
 
       def apply_correction(corrector)
-        current_corrector.merge!(corrector) if corrector
+        @current_corrector&.merge!(corrector) if corrector
       end
 
-      # Other private methods
+      ### Reserved for Commissioner:
+
+      # Called before any investigation
+      def begin_investigation(processed_source)
+        @current_offenses = []
+        @currently_disabled_lines = {}
+        @processed_source = processed_source
+        @current_corrector = Corrector.new(@processed_source) if @processed_source.valid_syntax?
+      end
+
+      # Called to complete an investigation
+      def complete_investigation
+        [@current_offenses, @current_corrector]
+      ensure
+        reset_investigation
+      end
+
+      ### Actually private methods
+
+      def reset_investigation
+        @currently_disabled_lines = @current_offenses = @processed_source = @current_corrector = nil
+      end
+
+      def duplicate_location?(location)
+        @current_offenses.any? { |o| o.location == location }
+      end
+
+      def correct(range)
+        status = correction_strategy
+
+        if block_given?
+          corrector = Corrector.new(@processed_source)
+          yield corrector
+        end
+
+        case status
+        when :corrected_with_todo
+          apply_correction(disable_uncorrectable(range))
+        when :corrected
+          return :uncorrected if corrector.nil? || corrector.empty?
+
+          apply_correction(corrector)
+        end
+        status
+      end
+
+      def correction_strategy
+        return :unsupported unless correctable?
+        return :uncorrected unless autocorrect?
+
+        if self.class.support_autocorrect?
+          :corrected
+        elsif disable_uncorrectable?
+          :corrected_with_todo
+        end
+      end
+
+      def disable_uncorrectable(range)
+        line = range.line
+        return if @currently_disabled_lines.key?(line)
+
+        @currently_disabled_lines[line] = true
+        disable_offense(range)
+      end
+
       def range_from_node_or_range(node_or_range)
         if node_or_range.respond_to?(:loc)
           node_or_range.loc.expression
-        else
+        elsif node_or_range.is_a?(::Parser::Source::Range)
           node_or_range
+        else
+          extra = ' (call `add_global_offense`)' if node_or_range.nil?
+          raise "Expected a Source::Range, got #{node_or_range.inspect}#{extra}"
         end
       end
 

@@ -95,8 +95,9 @@ RSpec.shared_context 'config', :config do # rubocop:disable Metrics/BlockLength
   end
 
   let(:cop) do
-    cop_class.new(config, cop_options)
-             .tap { |cop| cop.processed_source = processed_source }
+    cop_class.new(config, cop_options).tap do |cop|
+      cop.send :begin_investigation, processed_source
+    end
   end
 end
 

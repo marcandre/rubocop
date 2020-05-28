@@ -153,11 +153,12 @@ module RuboCop
     def add_redundant_disables(file, offenses, source)
       if check_for_redundant_disables?(source)
         redundant_cop_disable_directive(file) do |cop|
-          cop.processed_source = source
+          cop.send :begin_investigation, source
           cop.check(offenses, source.disabled_line_ranges, source.comments)
-          offenses += cop.offenses
+          off, corrector = cop.send :complete_investigation
+          offenses += off
           offenses += autocorrect_redundant_disables(file, source, cop,
-                                                     offenses)
+                                                     offenses, corrector)
         end
       end
 
@@ -181,9 +182,9 @@ module RuboCop
       @options[:except] || @options[:only]
     end
 
-    def autocorrect_redundant_disables(file, source, cop, offenses)
-      team = Cop::Team.mobilize(RuboCop::Cop::Registry.new, nil, @options)
-      team.autocorrect(source.buffer, [cop])
+    def autocorrect_redundant_disables(file, source, cop, offenses, corrector)
+      team = Cop::Team.new([cop], nil, @options)
+      team.autocorrect(source.buffer, [cop], [corrector])
 
       return [] unless team.updated_source_file?
 
@@ -295,10 +296,10 @@ module RuboCop
     def inspect_file(processed_source)
       config = @config_store.for_file(processed_source.path)
       team = Cop::Team.mobilize(mobilized_cop_classes(config), config, @options)
-      offenses = team.inspect_file(processed_source)
+      report = team.investigate(processed_source)
       @errors.concat(team.errors)
       @warnings.concat(team.warnings)
-      [offenses, team.updated_source_file?]
+      [report.offenses, team.updated_source_file?]
     end
 
     def mobilized_cop_classes(config)

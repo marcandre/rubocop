@@ -2,11 +2,15 @@
 
 RSpec.describe RuboCop::Cop::Commissioner do
   describe '#investigate' do
-    subject(:offenses) { commissioner.investigate(processed_source) }
+    subject(:offenses) do
+      all_offenses, _all_correctors = report
+      all_offenses.flatten(1)
+    end
 
+    let(:report) { commissioner.investigate(processed_source) }
     let(:cop) do
       # rubocop:disable RSpec/VerifiedDoubles
-      double(RuboCop::Cop::Cop, offenses: []).as_null_object
+      double(RuboCop::Cop::Base, complete_investigation: [[], nil]).as_null_object
       # rubocop:enable RSpec/VerifiedDoubles
     end
     let(:cops) { [cop] }
@@ -22,7 +26,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
     let(:processed_source) { parse_source(source, 'file.rb') }
 
     it 'returns all offenses found by the cops' do
-      allow(cop).to receive(:offenses).and_return([1])
+      allow(cop).to receive(:complete_investigation).and_return([[1], nil])
 
       expect(offenses).to eq [1]
     end
@@ -62,7 +66,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
 
       it 'passes the input params to all cops/forces that implement their own' \
          ' #investigate method' do
-        expect(cop).to receive(:investigate).with(processed_source)
+        expect(cop).to receive(:on_walk_begin).with(no_args)
         expect(force).to receive(:investigate).with(processed_source)
 
         offenses

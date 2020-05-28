@@ -43,7 +43,7 @@ module CopHelper
     processed_source = parse_source(source, file)
     _investigate(cop, processed_source)
 
-    cop.current_corrector.rewrite
+    @last_corrector.rewrite
   end
 
   def autocorrect_source_with_loop(source, file = nil)
@@ -61,9 +61,12 @@ module CopHelper
     end
   end
 
+  # @return [offenses], sets @last_corrector
   def _investigate(cop, processed_source)
     team = RuboCop::Cop::Team.new([cop], nil, raise_error: true)
-    team.inspect_file(processed_source)
+    report = team.investigate(processed_source)
+    @last_corrector = report.correctors.first || RuboCop::Cop::Corrector.new(processed_source)
+    report.offenses
   end
 end
 
