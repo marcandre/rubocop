@@ -81,8 +81,6 @@ module RuboCop
       # during the AST traversal.
       def invoke_custom_processing(cops_or_forces, processed_source)
         cops_or_forces.each do |cop|
-          next unless cop.respond_to?(:investigate)
-
           with_cop_error_handling(cop) do
             cop.investigate(processed_source)
           end
@@ -100,8 +98,6 @@ module RuboCop
       # its own processing.
       def invoke_custom_post_walk_processing(cops, processed_source)
         cops.each do |cop|
-          next unless cop.respond_to?(:investigate_post_walk)
-
           with_cop_error_handling(cop) do
             cop.investigate_post_walk(processed_source)
           end

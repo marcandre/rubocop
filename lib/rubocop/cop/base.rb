@@ -79,6 +79,16 @@ module RuboCop
         @current_corrector = nil
       end
 
+      # Called before all on_... have been called
+      def investigate(processed_source)
+        # Typically do nothing here
+      end
+
+      # Called after all on_... have been called
+      def investigate_post_walk(processed_source)
+        # Typically do nothing here
+      end
+
       def join_force?(_force_class)
         false
       end
