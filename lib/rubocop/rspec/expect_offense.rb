@@ -72,8 +72,18 @@ module RuboCop
     #
     #   expect_no_corrections
     module ExpectOffense
+
+      def format_offense(source, **replacements)
+        replacements.each do |keyword, value|
+          source = source.gsub("%{#{keyword}}", value)
+                         .gsub("^{#{keyword}}", '^' * value.size)
+        end
+        source
+      end
+
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-      def expect_offense(source, file = nil)
+      def expect_offense(source, file = nil, **replacements)
+        source = format_offense(source, **replacements)
         RuboCop::Formatter::DisabledConfigFormatter
           .config_to_allow_offenses = {}
         RuboCop::Formatter::DisabledConfigFormatter.detected_styles = {}
