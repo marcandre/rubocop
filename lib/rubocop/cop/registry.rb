@@ -217,6 +217,14 @@ module RuboCop
 
       private
 
+      def initialize_copy(_)
+        super
+        @registry = @registry.dup
+        @departments = @registry.dup
+        @cops_by_cop_name = @cops_by_cop_name.dup
+        @unqualified_cop_names = nil
+      end
+
       def with(cops)
         self.class.new(cops)
       end

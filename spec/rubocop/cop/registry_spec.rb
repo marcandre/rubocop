@@ -46,6 +46,14 @@ RSpec.describe RuboCop::Cop::Registry do
     described_class.with_temporary_global { test.run }
   end
 
+  it 'can be cloned' do
+    klass = ::RuboCop::Cop::Metrics::AbcSize
+    copy = registry.dup
+    copy.enlist(klass)
+    expect(copy.cops).to include(klass)
+    expect(registry.cops).not_to include(klass)
+  end
+
   it 'exposes cop departments' do
     expect(registry.departments).to eql(%i[Lint Layout Metrics RSpec Test])
   end
