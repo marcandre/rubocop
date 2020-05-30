@@ -27,29 +27,29 @@ module RuboCop
         @departments = {}
         @cops_by_cop_name = Hash.new { |hash, key| hash[key] = [] }
 
-        cops.each { |cop| enlist(cop) }
+        @enlisted = cops
         @options = options
       end
 
       def enlist(cop)
-        @registry[cop.badge] = cop
-        @departments[cop.department] ||= []
-        @departments[cop.department] << cop
-        @cops_by_cop_name[cop.cop_name] << cop
+        @enlisted << cop
       end
 
       # @return [Array<Symbol>] list of departments for current cops.
       def departments
+        actualize
         @departments.keys
       end
 
       # @return [Registry] Cops for that specific department.
       def with_department(department)
+        actualize
         with(@departments.fetch(department, []))
       end
 
       # @return [Registry] Cops not for a specific department.
       def without_department(department)
+        actualize
         without_department = @departments.dup
         without_department.delete(department)
 
@@ -126,14 +126,17 @@ module RuboCop
 
       # @return [Hash{String => Array<Class>}]
       def to_h
+        actualize
         @cops_by_cop_name
       end
 
       def cops
+        actualize
         @registry.values
       end
 
       def length
+        actualize
         @registry.size
       end
 
@@ -172,6 +175,7 @@ module RuboCop
       end
 
       def sort!
+        actualize
         @registry = Hash[@registry.sort_by { |badge, _| badge.cop_name }]
 
         self
@@ -223,6 +227,17 @@ module RuboCop
         @departments = @registry.dup
         @cops_by_cop_name = @cops_by_cop_name.dup
         @unqualified_cop_names = nil
+      end
+
+      def actualize
+        @enlisted.each do |cop|
+          @registry[cop.badge] = cop
+          @departments[cop.department] ||= []
+          @departments[cop.department] << cop
+          @cops_by_cop_name[cop.cop_name] << cop
+        end
+        @enlisted = []
+        self
       end
 
       def with(cops)
