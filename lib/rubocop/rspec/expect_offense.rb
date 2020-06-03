@@ -90,7 +90,7 @@ module RuboCop
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-      def expect_offense(source, file = nil, **replacements)
+      def expect_offense(source, file = nil, severity: nil, **replacements)
         source = format_offense(source, **replacements)
         RuboCop::Formatter::DisabledConfigFormatter
           .config_to_allow_offenses = {}
@@ -108,11 +108,12 @@ module RuboCop
 
         raise 'Error parsing example code' unless @processed_source.valid_syntax?
 
-        _investigate(cop, @processed_source)
+        offenses = _investigate(cop, @processed_source)
         actual_annotations =
-          expected_annotations.with_offense_annotations(cop.offenses)
+          expected_annotations.with_offense_annotations(offenses)
 
         expect(actual_annotations.to_s).to eq(expected_annotations.to_s)
+        expect(offenses.map(&:severity).uniq).to eq([severity]) if severity
       end
 
       def expect_correction(correction, loop: false)
@@ -122,19 +123,16 @@ module RuboCop
         new_source = loop do
           iteration += 1
 
-          corrector =
-            RuboCop::Cop::Corrector.new(@processed_source.buffer, cop.corrections)
-          corrected_source = corrector.rewrite
+          corrected_source = @last_corrector.rewrite
 
           break corrected_source unless loop
-          break corrected_source if cop.corrections.empty?
+          break corrected_source if @last_corrector.empty?
 
           if iteration > RuboCop::Runner::MAX_ITERATIONS
             raise RuboCop::Runner::InfiniteCorrectionLoop.new(@processed_source.path, [])
           end
 
           # Prepare for next loop
-          cop.instance_variable_set(:@corrections, [])
           @processed_source = parse_source(corrected_source,
                                            @processed_source.path)
           _investigate(cop, @processed_source)
@@ -147,24 +145,22 @@ module RuboCop
       def expect_no_corrections
         raise '`expect_no_corrections` must follow `expect_offense`' unless @processed_source
 
-        return if cop.corrections.empty?
+        return if @last_corrector.empty?
 
         # In order to print a nice diff, e.g. what source got corrected to,
         # we need to run the actual corrections
 
-        corrector =
-          RuboCop::Cop::Corrector.new(@processed_source.buffer, cop.corrections)
-        new_source = corrector.rewrite
+        new_source = @last_corrector.rewrite
 
         expect(new_source).to eq(@processed_source.buffer.source)
       end
 
       def expect_no_offenses(source, file = nil)
-        inspect_source(source, file)
+        offenses = inspect_source(source, file)
 
         expected_annotations = AnnotatedSource.parse(source)
         actual_annotations =
-          expected_annotations.with_offense_annotations(cop.offenses)
+          expected_annotations.with_offense_annotations(offenses)
         expect(actual_annotations.to_s).to eq(source)
       end
 
