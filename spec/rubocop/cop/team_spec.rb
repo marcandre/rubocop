@@ -91,8 +91,8 @@ RSpec.describe RuboCop::Cop::Team do
     include FileHelper
 
     let(:file_path) { '/tmp/example.rb' }
+    let(:source) { RuboCop::ProcessedSource.from_file(file_path, ruby_version) }
     let(:offenses) do
-      source = RuboCop::ProcessedSource.from_file(file_path, ruby_version)
       team.inspect_file(source)
     end
 
@@ -208,6 +208,18 @@ RSpec.describe RuboCop::Cop::Team do
 
         expect { team.inspect_file(source) }.to raise_error(cause)
         expect($stderr.string).to include(error_message)
+      end
+    end
+
+    context 'when done twice' do
+      let(:cop_classes) { [RuboCop::Cop::Base, RuboCop::Cop::Cop] }
+
+      it 'allows cops to get ready' do
+        before = team.cops.dup
+        team.inspect_file(source)
+        team.inspect_file(source)
+        expect(team.cops).to match_array([be(before.first), be_a(RuboCop::Cop::Cop)])
+        expect(team.cops.last).not_to be(before.last)
       end
     end
   end

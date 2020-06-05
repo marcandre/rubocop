@@ -74,6 +74,66 @@ The `corrector` is now yielded from `add_offense`. Move the code of your method 
     end
 ----
 
+=== If your class caches data
+
+The instance of your cops will be called on different `processed_source` now, so you must clear your cache data.
+
+You can do so in the `on_walk_begin` callback:
+
+[source,ruby]
+----
+# Before
+class MyCachingCop < Cop
+  def on_send(node)
+    if my_cached_data[node]
+      #...
+    end
+  end
+
+  def my_cached_data
+    @data ||= processed_source.comments.map { # ... }
+  end
+end
+
+# After
+class MyCachingCop < Base
+  def on_send(node)
+    if my_cached_data[node]
+      #...
+    end
+  end
+
+  def my_cached_data
+    @data ||= processed_source.comments.map { # ... }
+  end
+
+  def on_walk_begin
+    @data = nil
+    super  # Be nice and call super for callback
+  end
+end
+-----
+
+Alternatively, you can use the new `cache` helper method which will cache the data and clear the cache for you:
+
+[source,ruby]
+----
+# After (alternate solution)
+class MyCachingCop < Cop
+  cache :my_cached_data
+
+  def on_send(node)
+    if my_cached_data[node]
+      #...
+    end
+  end
+
+  def my_cached_data
+    processed_source.comments.map { # ... }
+  end
+end
+-----
+
 === Upgrading specs
 
 It is highly recommended you use `expect_offense` / `expect_no_offense` in your specs, e.g.:
@@ -143,7 +203,6 @@ Even the legacy mode yields a corrector, but if a developer uses it an error wil
 
 == Autocorrection
 
-[discrete]
 ==== `#autocorrect`
 
 _Legacy:_ calls `autocorrect` unless it is disabled / autocorrect is off

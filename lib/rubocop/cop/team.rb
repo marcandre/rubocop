@@ -29,8 +29,8 @@ module RuboCop
         @cops = cops
         @config = config
         @options = options
-        @errors = []
-        @warnings = []
+        reset
+        @ready = true
 
         validate_config
       end
@@ -97,6 +97,8 @@ module RuboCop
         process_errors(processed_source.path, report.errors)
 
         report
+      ensure
+        @ready = false
       end
 
       def forces
@@ -140,6 +142,19 @@ module RuboCop
 
       private
 
+      def be_ready
+        return if @ready
+
+        reset
+        @cops.map!(&:ready)
+        @ready = true
+      end
+
+      def reset
+        @errors = []
+        @warnings = []
+      end
+
       def investigate_partial(cops, processed_source)
         return Investigation.new([], [], [], []) if cops.empty?
 
@@ -150,6 +165,7 @@ module RuboCop
       end
 
       def roundup_relevant_cops(filename)
+        be_ready
         cops.reject do |cop|
           cop.excluded_file?(filename) ||
             !support_target_ruby_version?(cop) ||

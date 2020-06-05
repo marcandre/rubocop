@@ -38,6 +38,7 @@ module RuboCop
       include Util
       include IgnoredNode
       include AutocorrectLogic
+      extend Cache
 
       attr_reader :config, :processed_source
 
@@ -216,6 +217,14 @@ module RuboCop
       def offenses
         raise 'The offenses are not directly available; ' \
           'they are returned as the result of the investigation'
+      end
+
+      ### Reserved for Cop::Cop
+
+      # @api private
+      # Called between investigations
+      def ready
+        self
       end
 
       private

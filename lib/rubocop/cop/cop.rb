@@ -88,6 +88,13 @@ module RuboCop
         Registry.qualified_cop_name(name, origin)
       end
 
+      # @api private
+      # Called between investigations
+      def ready
+        # Many v0 cops rely on being run on new objects...
+        self.class.new(@config, @options)
+      end
+
       private
 
       def begin_investigation(processed_source)
