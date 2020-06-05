@@ -141,9 +141,9 @@ module RuboCop
         severity = find_severity(range_to_pass, severity)
         message = find_message(range_to_pass, message)
 
-        status = enabled_line?(range.line) ? correct(range, &block) : :disabled
+        status, corrector = enabled_line?(range.line) ? correct(range, &block) : :disabled
 
-        @current_offenses << Offense.new(severity, range, message, name, status)
+        @current_offenses << Offense.new(severity, range, message, name, status, corrector)
       end
 
       def config_to_allow_offenses
@@ -264,7 +264,7 @@ module RuboCop
         @current_offenses.any? { |o| o.location == location }
       end
 
-      # @return [Symbol] offense status
+      # @return [Symbol, Corrector] offense status
       def correct(range)
         status = correction_strategy
 
@@ -276,9 +276,9 @@ module RuboCop
           end
         end
 
-        return status unless status == :attempt_correction
+        status = attempt_correction(range, corrector) if status == :attempt_correction
 
-        attempt_correction(range, corrector)
+        [status, corrector]
       end
 
       # @return [Symbol] offense status
