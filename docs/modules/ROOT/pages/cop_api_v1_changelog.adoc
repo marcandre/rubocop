@@ -134,6 +134,10 @@ class MyCachingCop < Cop
 end
 -----
 
+=== Other API changes
+
+If you cop is one of the few to use `investigate`, `investigate_post_walk`, `join_force?`, `Corrector`, these have changed. See the Detailed API Changes.
+
 === Upgrading specs
 
 It is highly recommended you use `expect_offense` / `expect_no_offense` in your specs, e.g.:
@@ -163,7 +167,7 @@ RSpec.describe RuboCop::Cop::Custom::MySillyCorrectingCop, :config do
 end
 ----
 
-In the unlikely case where you use the class `RuboCop::Cop::Corrector` directly, it has changed a bit but you can ease your transition with `RuboCop::Cop::Legacy::Corrector`  that is meant to be backwards compatible. You will need to `require 'rubocop/cop/legacy/corrector'`
+In the unlikely case where you use the class `RuboCop::Cop::Corrector` directly, it has changed a bit but you can ease your transition with `RuboCop::Cop::Legacy::Corrector`  that is meant to be somewhat backwards compatible. You will need to `require 'rubocop/cop/legacy/corrector'`
 
 = Detailed API Changes
 

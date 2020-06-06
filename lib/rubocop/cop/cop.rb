@@ -53,6 +53,7 @@ module RuboCop
 
       def self.joining_forces
         return unless method_defined?(:join_force?)
+
         cop = new
         Force.all.select do |force_class|
           cop.join_force?(force_class)
@@ -101,6 +102,12 @@ module RuboCop
       def ready
         # Many v0 cops rely on being run on new objects...
         self.class.new(@config, @options)
+      end
+
+      # @deprecated
+      # Open issue if there's a valid use case to include this in Base
+      def parse(source, path = nil)
+        ProcessedSource.new(source, target_ruby_version, path)
       end
 
       private

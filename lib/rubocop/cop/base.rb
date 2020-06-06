@@ -45,36 +45,6 @@ module RuboCop
       # @api private Reserved for Commissioner
       Investigation = Struct.new(:offenses, :corrector)
 
-      # Call for abstract Cop classes
-      def self.exclude_from_registry
-        Registry.global.dismiss(self)
-      end
-
-      def self.badge
-        @badge ||= Badge.for(name)
-      end
-
-      def self.cop_name
-        badge.to_s
-      end
-
-      def self.department
-        badge.department
-      end
-
-      def self.lint?
-        department == :Lint
-      end
-
-      # Returns true if the cop name or the cop namespace matches any of the
-      # given names.
-      def self.match?(given_names)
-        return false unless given_names
-
-        given_names.include?(cop_name) ||
-          given_names.include?(department.to_s)
-      end
-
       # List of cops that should not try to autocorrect at the same
       # time as this cop
       #
@@ -109,25 +79,18 @@ module RuboCop
         # Typically do nothing here
       end
 
-      def join_force?(_force_class)
-        false
-      end
-
-      def cop_config
-        # Use department configuration as basis, but let individual cop
-        # configuration override.
-        @cop_config ||= @config.for_cop(self.class.department.to_s)
-                               .merge(@config.for_cop(self))
-      end
-
       # Override and return the Force class(es) you need to join
-      def self.joining_forces
-      end
+      def self.joining_forces; end
 
+      # Gets called if no message is specified when calling `add_offense` or
+      # `add_global_offense`
+      # Cops are discouraged to override this; instead pass your message directly
       def message(_range = nil)
         self.class::MSG
       end
 
+      # Adds an offense that has no particular location.
+      # No correction can be applied to global offenses
       def add_global_offense(message = nil, severity: nil)
         severity = find_severity(nil, severity)
         message = find_message(nil, message)
@@ -135,8 +98,10 @@ module RuboCop
           Offense.new(severity, Offense::NO_LOCATION, message, name, :unsupported)
       end
 
-      # Yields a corrector
-      #
+      # Adds an offense on the specified range (or node with an expression)
+      # Unless that offense is disabled for this range, a corrector will be yielded
+      # to provide the cop the opportunity to autocorrect the offense.
+      # If message is not specified, the method `message` will be called.
       def add_offense(node_or_range, message: nil, severity: nil, &block)
         range = range_from_node_or_range(node_or_range)
         return if duplicate_location?(range)
@@ -149,44 +114,6 @@ module RuboCop
         status, corrector = enabled_line?(range.line) ? correct(range, &block) : :disabled
 
         @current_offenses << Offense.new(severity, range, message, name, status, corrector)
-      end
-
-      def config_to_allow_offenses
-        Formatter::DisabledConfigFormatter
-          .config_to_allow_offenses[cop_name] ||= {}
-      end
-
-      def config_to_allow_offenses=(hash)
-        Formatter::DisabledConfigFormatter.config_to_allow_offenses[cop_name] =
-          hash
-      end
-
-      def target_ruby_version
-        @config.target_ruby_version
-      end
-
-      def target_rails_version
-        @config.target_rails_version
-      end
-
-      def parse(source, path = nil)
-        ProcessedSource.new(source, target_ruby_version, path)
-      end
-
-      def cop_name
-        @cop_name ||= self.class.cop_name
-      end
-
-      alias name cop_name
-
-      def relevant_file?(file)
-        file == RuboCop::AST::ProcessedSource::STRING_SOURCE_NAME ||
-          file_name_matches_any?(file, 'Include', true) &&
-            !file_name_matches_any?(file, 'Exclude', false)
-      end
-
-      def excluded_file?(file)
-        !relevant_file?(file)
       end
 
       # This method should be overridden when a cop's behavior depends
@@ -208,22 +135,98 @@ module RuboCop
         nil
       end
 
-      def self.support_autocorrect?
-        false
-      end
-
       def self.inherited(subclass)
         Registry.global.enlist(subclass)
       end
 
-      ### Make potential errors with previous API more obvious
+      # Call for abstract Cop classes
+      def self.exclude_from_registry
+        Registry.global.dismiss(self)
+      end
 
+      # Returns if class supports auto_correct.
+      # It is recommended to extend AutoCorrector instead of overriding
+      def self.support_autocorrect?
+        false
+      end
+
+      ### Naming
+
+      def self.badge
+        @badge ||= Badge.for(name)
+      end
+
+      def self.cop_name
+        badge.to_s
+      end
+
+      def self.department
+        badge.department
+      end
+
+      def self.lint?
+        department == :Lint
+      end
+
+      # Returns true if the cop name or the cop namespace matches any of the
+      # given names.
+      def self.match?(given_names)
+        return false unless given_names
+
+        given_names.include?(cop_name) ||
+          given_names.include?(department.to_s)
+      end
+
+      def cop_name
+        @cop_name ||= self.class.cop_name
+      end
+
+      alias name cop_name
+
+      ### Configuration Helpers
+
+      def cop_config
+        # Use department configuration as basis, but let individual cop
+        # configuration override.
+        @cop_config ||= @config.for_cop(self.class.department.to_s)
+                               .merge(@config.for_cop(self))
+      end
+
+      def config_to_allow_offenses
+        Formatter::DisabledConfigFormatter
+          .config_to_allow_offenses[cop_name] ||= {}
+      end
+
+      def config_to_allow_offenses=(hash)
+        Formatter::DisabledConfigFormatter.config_to_allow_offenses[cop_name] =
+          hash
+      end
+
+      def target_ruby_version
+        @config.target_ruby_version
+      end
+
+      def target_rails_version
+        @config.target_rails_version
+      end
+
+      def relevant_file?(file)
+        file == RuboCop::AST::ProcessedSource::STRING_SOURCE_NAME ||
+          file_name_matches_any?(file, 'Include', true) &&
+            !file_name_matches_any?(file, 'Exclude', false)
+      end
+
+      def excluded_file?(file)
+        !relevant_file?(file)
+      end
+
+      ### Reserved for Cop::Cop
+
+      # @deprecated Make potential errors with previous API more obvious
       def offenses
         raise 'The offenses are not directly available; ' \
           'they are returned as the result of the investigation'
       end
-
-      ### Reserved for Cop::Cop
 
       # @api private
       # Called between investigations
