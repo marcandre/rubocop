@@ -2,11 +2,17 @@
 
 RSpec.describe RuboCop::Cop::Commissioner do
   describe '#investigate' do
-    subject(:offenses) { commissioner.investigate(processed_source) }
+    subject(:offenses) do
+      all_offenses, _all_correctors = report
+      all_offenses.flatten(1)
+    end
 
+    let(:report) { commissioner.investigate(processed_source) }
+    let(:cop_offenses) { [] }
+    let(:cop_report) { RuboCop::Cop::Base::Investigation.new(cop_offenses, nil) }
     let(:cop) do
       # rubocop:disable RSpec/VerifiedDoubles
-      double(RuboCop::Cop::Cop, offenses: []).as_null_object
+      double(RuboCop::Cop::Base, complete_investigation: cop_report).as_null_object
       # rubocop:enable RSpec/VerifiedDoubles
     end
     let(:cops) { [cop] }
@@ -21,10 +27,12 @@ RSpec.describe RuboCop::Cop::Commissioner do
     RUBY
     let(:processed_source) { parse_source(source, 'file.rb') }
 
-    it 'returns all offenses found by the cops' do
-      allow(cop).to receive(:offenses).and_return([1])
+    context 'when a cop reports offenses' do
+      let(:cop_offenses) { [Object.new] }
 
-      expect(offenses).to eq [1]
+      it 'returns all offenses found by the cops' do
+        expect(offenses).to eq cop_offenses
+      end
     end
 
     it 'traverses the AST and invoke cops specific callbacks' do
@@ -62,9 +70,19 @@ RSpec.describe RuboCop::Cop::Commissioner do
 
       it 'passes the input params to all cops/forces that implement their own' \
          ' #investigate method' do
-        expect(cop).to receive(:investigate).with(processed_source)
+        expect(cop).to receive(:on_walk_begin).with(no_args)
         expect(force).to receive(:investigate).with(processed_source)
 
+        offenses
+      end
+    end
+
+    context 'when given a source with parsing errors' do
+      let(:source) { '(' }
+
+      it 'only calls on_other_file' do
+        expect(cop).not_to receive(:on_walk_begin)
+        expect(cop).to receive(:on_other_file)
         offenses
       end
     end

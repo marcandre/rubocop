@@ -34,18 +34,28 @@ module RuboCop
         end
       end
 
+      # @return [offenses, correctors]
       def investigate(processed_source)
         reset_errors
         reset_callbacks
-        prepare(processed_source)
-        invoke_custom_processing(@cops, processed_source)
-        invoke_custom_processing(@forces, processed_source)
-        walk(processed_source.ast) unless processed_source.blank?
-        invoke_custom_post_walk_processing(@cops, processed_source)
-        @cops.flat_map(&:offenses)
+
+        @cops.each { |cop| cop.send :begin_investigation, processed_source }
+        if processed_source.valid_syntax?
+          invoke(:on_walk_begin, @cops)
+          invoke(:investigate, @forces, processed_source)
+          walk(processed_source.ast)
+          invoke(:on_walk_end, @cops)
+        else
+          invoke(:on_other_file, @cops)
+        end
+        collate_reports(@cops.map { |cop| cop.send(:complete_investigation) })
       end
 
       private
+
+      def collate_reports(reports)
+        reports.map(&:to_a).transpose
+      end
 
       def trigger_responding_cops(callback, node)
         @callbacks[callback] ||= @cops.select do |cop|
@@ -66,44 +76,10 @@ module RuboCop
         @callbacks.clear
       end
 
-      # TODO: Bad design.
-      def prepare(processed_source)
-        @cops.each { |cop| cop.processed_source = processed_source }
-      end
-
-      # There are cops/forces that require their own custom processing.
-      # If they define the #investigate method, all input parameters passed
-      # to the commissioner will be passed to the cop too in order to do
-      # its own processing.
-      #
-      # These custom processors are invoked before the AST traversal,
-      # so they can build initial state that is later used by callbacks
-      # during the AST traversal.
-      def invoke_custom_processing(cops_or_forces, processed_source)
-        cops_or_forces.each do |cop|
-          next unless cop.respond_to?(:investigate)
-
-          with_cop_error_handling(cop) do
-            cop.investigate(processed_source)
-          end
-        end
-      end
-
-      # There are cops that require their own custom processing **after**
-      # the AST traversal. By performing the walk before invoking these
-      # custom processors, we allow these cops to build their own
-      # state during the primary AST traversal instead of performing their
-      # own AST traversals. Minimizing the number of walks is more efficient.
-      #
-      # If they define the #investigate_post_walk method, all input parameters
-      # passed to the commissioner will be passed to the cop too in order to do
-      # its own processing.
-      def invoke_custom_post_walk_processing(cops, processed_source)
+      def invoke(callback, cops, *args)
         cops.each do |cop|
-          next unless cop.respond_to?(:investigate_post_walk)
-
           with_cop_error_handling(cop) do
-            cop.investigate_post_walk(processed_source)
+            cop.send(callback, *args)
           end
         end
       end

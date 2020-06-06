@@ -54,6 +54,11 @@ module RuboCop
       # @api private
       attr_reader :status
 
+      PseudoSourceRange = Struct.new(:line, :column, :source_line, :begin_pos,
+                                     :end_pos)
+
+      NO_LOCATION = PseudoSourceRange.new(1, 0, '', 0, 1).freeze
+
       # @api private
       def initialize(severity, location, message, cop_name,
                      status = :uncorrected)
