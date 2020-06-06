@@ -3,13 +3,15 @@
 RSpec.describe RuboCop::Cop::Commissioner do
   describe '#investigate' do
     subject(:offenses) do
-      all_offenses, _all_correctors = report
-      all_offenses.flatten(1)
+      report.offenses
     end
 
     let(:report) { commissioner.investigate(processed_source) }
     let(:cop_offenses) { [] }
-    let(:cop_report) { RuboCop::Cop::Base::Investigation.new(cop_offenses, nil) }
+    let(:cop_report) do
+      RuboCop::Cop::Base::InvestigationReport
+        .new(nil, processed_source, cop_offenses, nil)
+    end
     let(:cop) do
       # rubocop:disable RSpec/VerifiedDoubles
       double(RuboCop::Cop::Base, complete_investigation: cop_report).as_null_object

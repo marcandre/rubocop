@@ -10,17 +10,6 @@ module RuboCop
     # first the ones needed for autocorrection (if any), then the rest
     # (unless autocorrections happened).
     class Team
-      Investigation = Struct.new(:cops, :offenses_per_cop, :correctors, :errors) do
-        def offenses
-          @offenses ||= offenses_per_cop.flatten(1)
-        end
-
-        def merge!(report)
-          each_pair { |key, value| value.concat(report[key]) }
-          self
-        end
-      end
-
       attr_reader :errors, :warnings, :updated_source_file, :cops
 
       alias updated_source_file? updated_source_file
@@ -67,14 +56,16 @@ module RuboCop
         @options[:debug]
       end
 
-      # Deprecated. Use investigate
+      # @deprecated. Use investigate
       # @return Array<offenses>
       def inspect_file(processed_source)
         investigate(processed_source).offenses
       end
 
-      # @return [Investigation]
+      # @return [Commissioner::InvestigationReport]
       def investigate(processed_source)
+        be_ready
+
         # The autocorrection process may have to be repeated multiple times
         # until there are no corrections left to perform
         # To speed things up, run auto-correcting cops by themselves, and only
@@ -85,14 +76,12 @@ module RuboCop
 
         report = investigate_partial(autocorrect_cops, processed_source)
 
-        if autocorrect(processed_source.buffer, report.cops, report.correctors)
-          # We corrected some errors. Another round of inspection will be
-          # done, and any other offenses will be caught then, so we don't
-          # need to continue.
-          return report
+        unless autocorrect(processed_source, report)
+          # If we corrected some errors, another round of inspection will be
+          # done, and any other offenses will be caught then, so only need
+          # to check other_cops if no correction was done
+          report = report.merge(investigate_partial(other_cops, processed_source))
         end
-
-        report.merge! investigate_partial(other_cops, processed_source)
 
         process_errors(processed_source.path, report.errors)
 
@@ -101,11 +90,13 @@ module RuboCop
         @ready = false
       end
 
+      # @deprecated
       def forces
-        @forces ||= forces_for(cops)
+        @forces ||= self.class.forces_for(cops)
       end
 
-      def forces_for(cops)
+      # @return [Array<Force>] needed for the given cops
+      def self.forces_for(cops)
         needed = Hash.new { |h, k| h[k] = [] }
         cops.each do |cop|
           Array(cop.class.joining_forces).each { |force| needed[force] << cop }
@@ -116,33 +107,30 @@ module RuboCop
         end
       end
 
-      def autocorrect(buffer, cops, correctors)
-        @updated_source_file = false
-        return unless autocorrect?
-
-        new_source = autocorrect_all_cops(buffer, cops, correctors)
-
-        return if new_source == buffer.source
-
-        if @options[:stdin]
-          # holds source read in from stdin, when --stdin option is used
-          @options[:stdin] = new_source
-        else
-          filename = buffer.name
-          File.open(filename, 'w') { |f| f.write(new_source) }
-        end
-        @updated_source_file = true
-      rescue RuboCop::ErrorWithAnalyzedFileLocation => e
-        process_errors(buffer.name, [e])
-        raise e.cause
-      end
-
       def external_dependency_checksum
         keys = cops.map(&:external_dependency_checksum).compact
         Digest::SHA1.hexdigest(keys.join)
       end
 
       private
+
+      def autocorrect(processed_source, report)
+        @updated_source_file = false
+        return unless autocorrect?
+
+        new_source = autocorrect_report(report)
+
+        return unless new_source
+
+        if @options[:stdin]
+          # holds source read in from stdin, when --stdin option is used
+          @options[:stdin] = new_source
+        else
+          filename = processed_source.buffer.name
+          File.open(filename, 'w') { |f| f.write(new_source) }
+        end
+        @updated_source_file = true
+      end
 
       def be_ready
         return if @ready
@@ -157,17 +145,14 @@ module RuboCop
         @warnings = []
       end
 
+      # @return [Commissioner::InvestigationReport]
       def investigate_partial(cops, processed_source)
-        return Investigation.new([], [], [], []) if cops.empty?
-
-        commissioner = Commissioner.new(cops, forces_for(cops), @options)
-        offenses, correctors = commissioner.investigate(processed_source)
-
-        Investigation.new(cops, offenses, correctors, commissioner.errors)
+        commissioner = Commissioner.new(cops, self.class.forces_for(cops), @options)
+        commissioner.investigate(processed_source)
       end
 
+      # @return [Array<cop>]
       def roundup_relevant_cops(filename)
-        be_ready
         cops.reject do |cop|
           cop.excluded_file?(filename) ||
             !support_target_ruby_version?(cop) ||
@@ -187,28 +172,35 @@ module RuboCop
         cop.class.support_target_rails_version?(cop.target_rails_version)
       end
 
-      def autocorrect_all_cops(buffer, cops, correctors)
-        corrector = Corrector.new(buffer)
+      def autocorrect_report(report)
+        corrector = collate_corrections(report)
 
-        collate_corrections(corrector, cops, correctors)
-
-        if !corrector.empty?
-          corrector.rewrite
-        else
-          buffer.source
-        end
+        corrector.rewrite unless corrector.empty?
       end
 
-      def collate_corrections(corrector, cops, correctors)
-        skips = Set.new
+      def collate_corrections(report)
+        corrector = Corrector.new(report.processed_source)
 
-        cops.zip(correctors) do |cop, to_merge|
-          next if to_merge.nil? || to_merge.empty?
-          next if skips.include?(cop.class)
-
+        each_corrector(report) do |to_merge|
           suppress_clobbering do
             corrector.merge!(to_merge)
           end
+        end
+
+        corrector
+      end
+
+      def each_corrector(report)
+        skips = Set.new
+        report.cop_reports.each do |cop_report|
+          cop = cop_report.cop
+          corrector = cop_report.corrector
+
+          next if corrector.nil? || corrector.empty?
+          next if skips.include?(cop.class)
+
+          yield corrector
+
           skips.merge(cop.class.autocorrect_incompatible_with)
         end
       end

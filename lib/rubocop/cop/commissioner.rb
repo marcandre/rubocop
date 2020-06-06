@@ -7,6 +7,35 @@ module RuboCop
     class Commissioner
       include RuboCop::AST::Traversal
 
+      # How a Commissioner returns the results of the investigation
+      # as a list of Cop::InvestigationReport and any errors caught
+      # during the investigation.
+      # Immutable
+      # Consider creation API private
+      InvestigationReport = Struct.new(:processed_source, :cop_reports, :errors) do
+        def cops
+          @cops ||= cop_reports.map(&:cop)
+        end
+
+        def offenses_per_cop
+          @offenses_per_cop ||= cop_reports.map(&:offenses)
+        end
+
+        def correctors
+          @correctors ||= cop_reports.map(&:corrector)
+        end
+
+        def offenses
+          @offenses ||= offenses_per_cop.flatten(1)
+        end
+
+        def merge(investigation)
+          InvestigationReport.new(processed_source,
+                                  cop_reports + investigation.cop_reports,
+                                  errors + investigation.errors)
+        end
+      end
+
       attr_reader :errors
 
       def initialize(cops, forces = [], options = {})
@@ -15,7 +44,7 @@ module RuboCop
         @options = options
         @callbacks = {}
 
-        reset_errors
+        reset
       end
 
       # Create methods like :on_send, :on_super, etc. They will be called
@@ -34,28 +63,24 @@ module RuboCop
         end
       end
 
-      # @return [offenses, correctors]
+      # @return [InvestigationReport]
       def investigate(processed_source)
-        reset_errors
-        reset_callbacks
+        reset
 
         @cops.each { |cop| cop.send :begin_investigation, processed_source }
         if processed_source.valid_syntax?
           invoke(:on_walk_begin, @cops)
           invoke(:investigate, @forces, processed_source)
-          walk(processed_source.ast)
+          walk(processed_source.ast) unless @cops.empty?
           invoke(:on_walk_end, @cops)
         else
           invoke(:on_other_file, @cops)
         end
-        collate_reports(@cops.map { |cop| cop.send(:complete_investigation) })
+        reports = @cops.map { |cop| cop.send(:complete_investigation) }
+        InvestigationReport.new(processed_source, reports, @errors)
       end
 
       private
-
-      def collate_reports(reports)
-        reports.map(&:to_a).transpose
-      end
 
       def trigger_responding_cops(callback, node)
         @callbacks[callback] ||= @cops.select do |cop|
@@ -68,12 +93,9 @@ module RuboCop
         end
       end
 
-      def reset_errors
+      def reset
         @errors = []
-      end
-
-      def reset_callbacks
-        @callbacks.clear
+        @callbacks = {}
       end
 
       def invoke(callback, cops, *args)

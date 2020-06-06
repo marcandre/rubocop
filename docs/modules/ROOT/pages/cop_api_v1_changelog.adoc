@@ -17,22 +17,22 @@ Nevertheless it is suggested that you tweak them to use the v1 API by following 
 [source,ruby]
 ----
 # Before
-    class MySillyCop < Cop
-      def on_send(node)
-        if node.method_name == :-
-          add_offense(node, location: :selector, message: "Be positive")
-        end
-      end
+class MySillyCop < Cop
+  def on_send(node)
+    if node.method_name == :-
+      add_offense(node, location: :selector, message: "Be positive")
     end
+  end
+end
 
 # After
-    class MySillyCop < Base
-      def on_send(node)
-        if node.method_name == :-
-          add_offense(node.loc.selector, message: "Be positive")
-        end
-      end
+class MySillyCop < Base
+  def on_send(node)
+    if node.method_name == :-
+      add_offense(node.loc.selector, message: "Be positive")
     end
+  end
+end
 ----
 
 === If your class supports autocorrection
@@ -46,39 +46,41 @@ The `corrector` is now yielded from `add_offense`. Move the code of your method 
 [source,ruby]
 ----
 # Before
-    class MySillyCorrectingCop < Cop
-      def on_send(node)
-        if node.method_name == :-
-          add_offense(node, location: :selector, message: 'Be positive')
-        end
-      end
-
-      def autocorrect(node)
-        lambda do |corrector|
-          corrector.replace(node.loc.selector, '+')
-        end
-      end
+class MySillyCorrectingCop < Cop
+  def on_send(node)
+    if node.method_name == :-
+      add_offense(node, location: :selector, message: 'Be positive')
     end
+  end
+
+  def autocorrect(node)
+    lambda do |corrector|
+      corrector.replace(node.loc.selector, '+')
+    end
+  end
+end
 
 # After
-    class MySillyCorrectingCop < Base
-      extend Autocorrector
+class MySillyCorrectingCop < Base
+  extend Autocorrector
 
-      def on_send(node)
-        if node.method_name == :-
-          add_offense(node.loc.selector, message: 'Be positive') do |corrector|
-            corrector.replace(node.loc.selector, '+')
-          end
-        end
+  def on_send(node)
+    if node.method_name == :-
+      add_offense(node.loc.selector, message: 'Be positive') do |corrector|
+        corrector.replace(node.loc.selector, '+')
       end
     end
+  end
+end
 ----
 
-=== If your class caches data
+=== If your class uses instance variables
 
-The instance of your cops will be called on different `processed_source` now, so you must clear your cache data.
+Do not use RuboCop's internal instance variables. If you used `@processed_source`, use `processed_source`. If you have a need to access an instance variable, open an issue with your usecase.
 
-You can do so in the `on_walk_begin` callback:
+The instance of your cops will be called on different `processed_source` now, so you must clear your instance variables that cache data.
+
+You can use the new `cache` helper method which will both cache the data and clear the cache for you:
 
 [source,ruby]
 ----
@@ -96,6 +98,26 @@ class MyCachingCop < Cop
 end
 
 # After
+class MyCachingCop < Cop
+  cache :my_cached_data
+
+  def on_send(node)
+    if my_cached_data[node]
+      #...
+    end
+  end
+
+  def my_cached_data
+    processed_source.comments.map { # ... }  # No need to store it in an instance variable
+  end
+end
+----
+
+Alternatively, you can do your own invalidation in the `on_walk_begin` callback:
+
+[source,ruby]
+----
+# After (alternate solution)
 class MyCachingCop < Base
   def on_send(node)
     if my_cached_data[node]
@@ -112,31 +134,11 @@ class MyCachingCop < Base
     super  # Be nice and call super for callback
   end
 end
------
-
-Alternatively, you can use the new `cache` helper method which will cache the data and clear the cache for you:
-
-[source,ruby]
 ----
-# After (alternate solution)
-class MyCachingCop < Cop
-  cache :my_cached_data
-
-  def on_send(node)
-    if my_cached_data[node]
-      #...
-    end
-  end
-
-  def my_cached_data
-    processed_source.comments.map { # ... }
-  end
-end
------
 
 === Other API changes
 
-If you cop is one of the few to use `investigate`, `investigate_post_walk`, `join_force?`, `Corrector`, these have changed. See the Detailed API Changes.
+If you cop uses `investigate`, `investigate_post_walk`, `join_force?`, or internal classes like `Corrector`, `Commissioner`, `Team`, these have changed. See the Detailed API Changes.
 
 === Upgrading specs
 
@@ -257,18 +259,24 @@ _Legacy:_ `join_force?(force_class)` was called with every force class
 
 _Current:_ `self.joining_forces` is now used to return the force (or an array of forces) to join.
 
+== Internal classes
+
 === `Corrector`
 
-_Legacy:_ accepted a second argument (an array of lambdas). Available through `Legacy::Corrector` if needed.
+_Legacy:_ `initialize` accepted a second argument (an array of lambdas). Available through `Legacy::Corrector` if needed.
 
-_Current:_ no second argument; not needed as correctors can be merged.
+_Current:_ derives from `parser`'s `TreeRewriter`. No second argument to `initialize`; not needed as correctors can be merged.
+
+=== `Commissioner` & `Team`
+
+Refactored for better separation of concern, being reusable, better result reporting and better error handling.
 
 == Misc API changes
 
 * internal API clarified for Commissioner. It calls `begin_investigation` and received the results in `complete_investigation`.
 * New method `add_global_offense` for offenses that are not attached to a location in particular; it's used for Syntax errors only right now.
 * `#offenses`: No longer accessible.
-* Callbacks `investigate(processed_source)` and `investigate_post_walk(processed_source)` are renamed `on_walk_begin` and `on_walk_end` and don't accept an argument; all `on_` callbacks can rely on `processed_source`.
+* Callbacks `investigate(processed_source)` and `investigate_post_walk(processed_source)` are renamed `on_walk_begin` and `on_walk_end` and don't accept an argument; all `on_` callbacks should rely on `processed_source`.
 * `#find_location` is deprecated.
 * `Correction` is deprecated.
 * A few registry access methods were moved from `Cop` to `Registry` both for correctness (e.g. `MyCop.qualified_cop_name` did not work nor made sense) and so that `Cop::Cop` no longer holds any necessary code anymore. Backwards compatibility is maintained.

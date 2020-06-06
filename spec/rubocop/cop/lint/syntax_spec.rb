@@ -3,7 +3,7 @@
 RSpec.describe RuboCop::Cop::Lint::Syntax, :config do
   describe '.offenses_from_processed_source' do
     let(:commissioner) { RuboCop::Cop::Commissioner.new([cop]) }
-    let(:offenses) { commissioner.investigate(processed_source).first.first }
+    let(:offenses) { commissioner.investigate(processed_source).offenses }
 
     context 'with a diagnostic error' do
       let(:source) { '(' }

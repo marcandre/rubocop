@@ -42,8 +42,10 @@ module RuboCop
 
       attr_reader :config, :processed_source
 
-      # @api private Reserved for Commissioner
-      Investigation = Struct.new(:offenses, :corrector)
+      # Reports of an investigation.
+      # Immutable
+      # Consider creation API private
+      InvestigationReport = Struct.new(:cop, :processed_source, :offenses, :corrector)
 
       # List of cops that should not try to autocorrect at the same
       # time as this cop
@@ -265,7 +267,7 @@ module RuboCop
 
       # Called to complete an investigation
       def complete_investigation
-        Investigation.new(@current_offenses, @current_corrector)
+        InvestigationReport.new(self, processed_source, @current_offenses, @current_corrector)
       ensure
         reset_investigation
       end
