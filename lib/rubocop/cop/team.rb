@@ -106,11 +106,13 @@ module RuboCop
       end
 
       def forces_for(cops)
-        Force.all.each_with_object([]) do |force_class, forces|
-          joining_cops = cops.select { |cop| cop.join_force?(force_class) }
-          next if joining_cops.empty?
+        needed = Hash.new { |h, k| h[k] = [] }
+        cops.each do |cop|
+          Array(cop.class.joining_forces).each { |force| needed[force] << cop }
+        end
 
-          forces << force_class.new(joining_cops)
+        needed.map do |force_class, joining_cops|
+          force_class.new(joining_cops)
         end
       end
 

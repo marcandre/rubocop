@@ -120,6 +120,10 @@ module RuboCop
                                .merge(@config.for_cop(self))
       end
 
+      # Override and return the Force class(es) you need to join
+      def self.joining_forces
+      end
+
       def message(_range = nil)
         self.class::MSG
       end

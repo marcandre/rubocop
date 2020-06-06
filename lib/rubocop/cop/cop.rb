@@ -51,6 +51,14 @@ module RuboCop
         method_defined?(:autocorrect)
       end
 
+      def self.joining_forces
+        return unless method_defined?(:join_force?)
+        cop = new
+        Force.all.select do |force_class|
+          cop.join_force?(force_class)
+        end
+      end
+
       # @deprecated
       def corrections
         # warn 'Cop#corrections is deprecated' TODO

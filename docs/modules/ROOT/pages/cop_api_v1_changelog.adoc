@@ -247,6 +247,12 @@ _Legacy:_ was an instance method.
 
 _Current:_ now a class method.
 
+=== Joining forces
+
+_Legacy:_ `join_force?(force_class)` was called with every force class
+
+_Current:_ `self.joining_forces` is now used to return the force (or an array of forces) to join.
+
 === `Corrector`
 
 _Legacy:_ accepted a second argument (an array of lambdas). Available through `Legacy::Corrector` if needed.
