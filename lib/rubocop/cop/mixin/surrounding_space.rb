@@ -5,7 +5,6 @@ module RuboCop
     # Common functionality for checking and correcting surrounding whitespace.
     module SurroundingSpace
       include RangeHelp
-      extend Cache
 
       NO_SPACE_COMMAND = 'Do not use'
       SPACE_COMMAND = 'Use'

@@ -212,13 +212,20 @@ RSpec.describe RuboCop::Cop::Team do
     end
 
     context 'when done twice' do
-      let(:cop_classes) { [RuboCop::Cop::Base, RuboCop::Cop::Cop] }
+      let(:persisting_cop_class) do
+        klass = Class.new(RuboCop::Cop::Base)
+        klass.exclude_from_registry
+        klass.define_singleton_method(:support_multiple_source?) { true }
+        stub_const('Test::Persisting', klass)
+        klass
+      end
+      let(:cop_classes) { [persisting_cop_class, RuboCop::Cop::Base] }
 
       it 'allows cops to get ready' do
         before = team.cops.dup
         team.inspect_file(source)
         team.inspect_file(source)
-        expect(team.cops).to match_array([be(before.first), be_a(RuboCop::Cop::Cop)])
+        expect(team.cops).to match_array([be(before.first), be_a(RuboCop::Cop::Base)])
         expect(team.cops.last).not_to be(before.last)
       end
     end

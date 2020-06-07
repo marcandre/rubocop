@@ -38,7 +38,6 @@ module RuboCop
       include Util
       include IgnoredNode
       include AutocorrectLogic
-      extend Cache
 
       attr_reader :config, :processed_source
 
@@ -222,18 +221,32 @@ module RuboCop
         !relevant_file?(file)
       end
 
+      ### Persistence
+
+      # Override if your cop should be called repeatedly for mutliple investigations
+      # Between calls to `on_walk_begin` and `on_walk_end`, the result of `processed_source`
+      # will remain the same. You should invalidate any caches that depend on the current
+      # `processed_source` in the `on_walk_begin` callback. If your cop does autocorrections,
+      # it is possible that your instance will be called multiple times with the same
+      # `processed_source.path` but different content.
+      def self.support_multiple_source?
+        false
+      end
+
+      # @api private
+      # Called between investigations
+      def ready
+        return self if self.class.support_multiple_source?
+
+        self.class.new(@config, @options)
+      end
+
       ### Reserved for Cop::Cop
 
       # @deprecated Make potential errors with previous API more obvious
       def offenses
         raise 'The offenses are not directly available; ' \
           'they are returned as the result of the investigation'
-      end
-
-      # @api private
-      # Called between investigations
-      def ready
-        self
       end
 
       private

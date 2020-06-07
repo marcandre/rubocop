@@ -97,13 +97,6 @@ module RuboCop
         Registry.qualified_cop_name(name, origin)
       end
 
-      # @api private
-      # Called between investigations
-      def ready
-        # Many v0 cops rely on being run on new objects...
-        self.class.new(@config, @options)
-      end
-
       # @deprecated
       # Open issue if there's a valid use case to include this in Base
       def parse(source, path = nil)

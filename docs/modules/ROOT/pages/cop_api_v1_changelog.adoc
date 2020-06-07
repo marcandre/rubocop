@@ -39,7 +39,7 @@ end
 
 Your class must `extend Autocorrector`
 
-The `corrector` is now yielded from `add_offense`. Move the code of your method `autocorrect` in that block and do not wrap your correction in a lambda.
+The `corrector` is now yielded from `add_offense`. Move the code of your method `autocorrect` in that block and do not wrap your correction in a lambda. `Corrector` are more powerful and can now be `merge`d.
 
 ==== Example:
 
@@ -78,9 +78,7 @@ end
 
 Do not use RuboCop's internal instance variables. If you used `@processed_source`, use `processed_source`. If you have a need to access an instance variable, open an issue with your usecase.
 
-The instance of your cops will be called on different `processed_source` now, so you must clear your instance variables that cache data.
-
-You can use the new `cache` helper method which will both cache the data and clear the cache for you:
+Cop instances will be called on different `processed_source` if the class supports it. In all cases it is recommended to to invalidate your cache data during the `on_walk_begin` callback:
 
 [source,ruby]
 ----
@@ -98,37 +96,8 @@ class MyCachingCop < Cop
 end
 
 # After
-class MyCachingCop < Cop
-  cache :my_cached_data
-
-  def on_send(node)
-    if my_cached_data[node]
-      #...
-    end
-  end
-
-  def my_cached_data
-    processed_source.comments.map { # ... }  # No need to store it in an instance variable
-  end
-end
-----
-
-Alternatively, you can do your own invalidation in the `on_walk_begin` callback:
-
-[source,ruby]
-----
-# After (alternate solution)
 class MyCachingCop < Base
-  def on_send(node)
-    if my_cached_data[node]
-      #...
-    end
-  end
-
-  def my_cached_data
-    @data ||= processed_source.comments.map { # ... }
-  end
-
+  # ... same as above, plus...
   def on_walk_begin
     @data = nil
     super  # Be nice and call super for callback
@@ -258,6 +227,10 @@ _Current:_ now a class method.
 _Legacy:_ `join_force?(force_class)` was called with every force class
 
 _Current:_ `self.joining_forces` is now used to return the force (or an array of forces) to join.
+
+== Cop persistence
+
+Cops can now be persisted between files. By default new cop instances are created for each source. See `support_multiple_source?` documentation
 
 == Internal classes
 
