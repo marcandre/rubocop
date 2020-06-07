@@ -38,7 +38,7 @@ module RuboCop
           super(config, options)
         end
 
-        def on_walk_begin
+        def on_new_investigation
           return unless offenses_to_check
 
           comments = processed_source.comments

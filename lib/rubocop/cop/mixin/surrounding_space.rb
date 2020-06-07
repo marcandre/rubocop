@@ -55,7 +55,7 @@ module RuboCop
         end
       end
 
-      def on_walk_begin
+      def on_new_investigation
         @token_table = nil
         super
       end

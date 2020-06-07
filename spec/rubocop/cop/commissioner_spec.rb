@@ -72,7 +72,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
 
       it 'passes the input params to all cops/forces that implement their own' \
          ' #investigate method' do
-        expect(cop).to receive(:on_walk_begin).with(no_args)
+        expect(cop).to receive(:on_new_investigation).with(no_args)
         expect(force).to receive(:investigate).with(processed_source)
 
         offenses
@@ -83,7 +83,7 @@ RSpec.describe RuboCop::Cop::Commissioner do
       let(:source) { '(' }
 
       it 'only calls on_other_file' do
-        expect(cop).not_to receive(:on_walk_begin)
+        expect(cop).not_to receive(:on_new_investigation)
         expect(cop).to receive(:on_other_file)
         offenses
       end

@@ -78,7 +78,7 @@ end
 
 Do not use RuboCop's internal instance variables. If you used `@processed_source`, use `processed_source`. If you have a need to access an instance variable, open an issue with your usecase.
 
-Cop instances will be called on different `processed_source` if the class supports it. In all cases it is recommended to to invalidate your cache data during the `on_walk_begin` callback:
+Cop instances will be called on different `processed_source` if the class supports it. In all cases it is recommended to to invalidate your cache data during the `on_new_investigation` callback:
 
 [source,ruby]
 ----
@@ -98,7 +98,7 @@ end
 # After
 class MyCachingCop < Base
   # ... same as above, plus...
-  def on_walk_begin
+  def on_new_investigation
     @data = nil
     super  # Be nice and call super for callback
   end
@@ -249,7 +249,7 @@ Refactored for better separation of concern, being reusable, better result repor
 * internal API clarified for Commissioner. It calls `begin_investigation` and received the results in `complete_investigation`.
 * New method `add_global_offense` for offenses that are not attached to a location in particular; it's used for Syntax errors only right now.
 * `#offenses`: No longer accessible.
-* Callbacks `investigate(processed_source)` and `investigate_post_walk(processed_source)` are renamed `on_walk_begin` and `on_walk_end` and don't accept an argument; all `on_` callbacks should rely on `processed_source`.
+* Callbacks `investigate(processed_source)` and `investigate_post_walk(processed_source)` are renamed `on_new_investigation` and `on_investigation_end` and don't accept an argument; all `on_` callbacks should rely on `processed_source`.
 * `#find_location` is deprecated.
 * `Correction` is deprecated.
 * A few registry access methods were moved from `Cop` to `Registry` both for correctness (e.g. `MyCop.qualified_cop_name` did not work nor made sense) and so that `Cop::Cop` no longer holds any necessary code anymore. Backwards compatibility is maintained.

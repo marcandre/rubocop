@@ -69,10 +69,10 @@ module RuboCop
 
         @cops.each { |cop| cop.send :begin_investigation, processed_source }
         if processed_source.valid_syntax?
-          invoke(:on_walk_begin, @cops)
+          invoke(:on_new_investigation, @cops)
           invoke(:investigate, @forces, processed_source)
           walk(processed_source.ast) unless @cops.empty?
-          invoke(:on_walk_end, @cops)
+          invoke(:on_investigation_end, @cops)
         else
           invoke(:on_other_file, @cops)
         end

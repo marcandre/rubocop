@@ -242,7 +242,7 @@ module RuboCop
             .map { |c| c.loc.line }
         end
 
-        def on_walk_begin
+        def on_new_investigation
           @comment_lines = nil
         end
       end

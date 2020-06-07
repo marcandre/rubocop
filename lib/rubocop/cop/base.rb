@@ -11,14 +11,14 @@ module RuboCop
     # A commissioner object is responsible for traversing the AST and invoking
     # the specific callbacks on each cop.
     #
-    # First the callback `on_walk_begin` is called;
+    # First the callback `on_new_investigation` is called;
     # if a cop needs to do its own processing of the AST or depends on
     # something else.
     #
     # Then callbacks like `on_def`, `on_send` (see AST::Traversal) are called
     # with their respective nodes.
     #
-    # Finally the callback `on_walk_end` is called.
+    # Finally the callback `on_investigation_end` is called.
     #
     # Within these callbacks, cops are meant to call `add_offense` or
     # `add_global_offense`. Use the `processed_source` method to
@@ -64,13 +64,13 @@ module RuboCop
 
       # Called before all on_... have been called
       # When refining this method, always call `super`
-      def on_walk_begin
+      def on_new_investigation
         # Typically do nothing here
       end
 
       # Called after all on_... have been called
       # When refining this method, always call `super`
-      def on_walk_end
+      def on_investigation_end
         # Typically do nothing here
       end
 
@@ -224,9 +224,9 @@ module RuboCop
       ### Persistence
 
       # Override if your cop should be called repeatedly for mutliple investigations
-      # Between calls to `on_walk_begin` and `on_walk_end`, the result of `processed_source`
+      # Between calls to `on_new_investigation` and `on_investigation_end`, the result of `processed_source`
       # will remain the same. You should invalidate any caches that depend on the current
-      # `processed_source` in the `on_walk_begin` callback. If your cop does autocorrections,
+      # `processed_source` in the `on_new_investigation` callback. If your cop does autocorrections,
       # it is possible that your instance will be called multiple times with the same
       # `processed_source.path` but different content.
       def self.support_multiple_source?

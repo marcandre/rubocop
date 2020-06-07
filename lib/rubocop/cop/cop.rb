@@ -69,13 +69,13 @@ module RuboCop
       end
 
       # Called before all on_... have been called
-      def on_walk_begin
+      def on_new_investigation
         investigate(processed_source) if respond_to?(:investigate)
         super
       end
 
       # Called after all on_... have been called
-      def on_walk_end
+      def on_investigation_end
         investigate_post_walk(processed_source) if respond_to?(:investigate_post_walk)
         super
       end
