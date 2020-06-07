@@ -60,9 +60,6 @@ module RuboCop
       #
       # @return [Corrector | nil]
       #   the autocorrection for this offense, or `nil` when not available
-      #
-      # @example
-      #   'LineLength'
       attr_reader :corrector
 
       PseudoSourceRange = Struct.new(:line, :column, :source_line, :begin_pos,
