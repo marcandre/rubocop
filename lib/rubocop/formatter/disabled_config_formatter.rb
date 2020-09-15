@@ -14,6 +14,7 @@ module RuboCop
         # Note that changes in the inspected code, or installation of new
         # versions of RuboCop, may require this file to be generated again.
       COMMENTS
+      private_constant :HEADING
 
       @config_to_allow_offenses = {}
       @detected_styles = {}

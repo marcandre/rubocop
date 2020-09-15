@@ -13,6 +13,7 @@ module RuboCop
             Enabled: pending
             VersionAdded: '%<version_added>s'
         YAML
+        private_constant :TEMPLATE
 
         def initialize(configuration_file_path:, badge:, version_added:)
           @configuration_file_path = configuration_file_path

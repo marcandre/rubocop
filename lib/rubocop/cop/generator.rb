@@ -78,6 +78,7 @@ module RuboCop
           end
         end
       RUBY
+      private_constant :SOURCE_TEMPLATE
 
       SPEC_TEMPLATE = <<~SPEC
         # frozen_string_literal: true
@@ -104,10 +105,12 @@ module RuboCop
           end
         end
       SPEC
+      private_constant :SPEC_TEMPLATE
 
       CONFIGURATION_ADDED_MESSAGE =
         '[modify] A configuration for the cop is added into ' \
           '%<configuration_file_path>s.'
+      private_constant :CONFIGURATION_ADDED_MESSAGE
 
       def initialize(name, github_user, output: $stdout)
         @badge = Badge.parse(name)
