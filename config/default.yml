@@ -2831,6 +2831,9 @@ Style/ConstantVisibility:
                  Check that class- and module constants have
                  visibility declarations.
   Enabled: false
+  DefaultVisibility: private
+  ExcludeModules: true
+  SafeAutoCorrect: false
   VersionAdded: '0.66'
 
 # Checks that you have put a copyright in a comment before any code.

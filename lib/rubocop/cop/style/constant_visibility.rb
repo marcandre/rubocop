@@ -9,6 +9,8 @@ module RuboCop
       # class or module. Explicitly declaring a visibility makes intent more
       # clear, and prevents outside actors from touching private state.
       #
+      # Autocorrection will use `DefaultVisiblity`, if any (default 'private')
+      #
       # @example
       #
       #   # bad
@@ -27,23 +29,30 @@ module RuboCop
       #   end
       #
       class ConstantVisibility < Base
+        extend AutoCorrector
         MSG = 'Explicitly make `%<constant_name>s` public or private using ' \
               'either `#public_constant` or `#private_constant`.'
 
         def on_casgn(node)
           return unless class_or_module_scope?(node)
+
+          _namespace, @constant_name, _value = *node
+
+          return if cop_config['ExcludeModules'] && @constant_name.match?(/[[:lower:]]/)
           return if visibility_declaration?(node)
 
           message = message(node)
-          add_offense(node, message: message)
+          add_offense(node, message: message) do |corrector|
+            next unless (default = cop_config['DefaultVisibility'])
+
+            corrector.insert_after(node, "\n#{default}_constant :#{@constant_name}")
+          end
         end
 
         private
 
         def message(node)
-          _namespace, constant_name, _value = *node
-
-          format(MSG, constant_name: constant_name)
+          format(MSG, constant_name: @constant_name)
         end
 
         def class_or_module_scope?(node)
@@ -58,10 +67,8 @@ module RuboCop
         end
 
         def visibility_declaration?(node)
-          _namespace, constant_name, _value = *node
-
           node.parent.each_child_node(:send).any? do |child|
-            visibility_declaration_for?(child, constant_name)
+            visibility_declaration_for?(child, @constant_name)
           end
         end
 
