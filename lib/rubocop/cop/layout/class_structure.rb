@@ -168,6 +168,8 @@ module RuboCop
           end
         end
 
+        alias on_sclass on_class
+
         private
 
         # Autocorrect by swapping between two nodes autocorrecting them
