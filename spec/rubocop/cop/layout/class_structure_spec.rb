@@ -463,7 +463,7 @@ RSpec.describe RuboCop::Cop::Layout::ClassStructure, :config do
     RUBY
   end
 
-  pending 'handles categories visibility with inline style too' do
+  it 'handles categories visibility with inline style too' do
     expect_offense(<<~RUBY)
       class A
         private attr_accessor :foo
@@ -473,6 +473,18 @@ RSpec.describe RuboCop::Cop::Layout::ClassStructure, :config do
       end
     RUBY
   end
+
+  it 'treats inline unknown macros as not recognized' do
+    expect_no_offenses(<<~RUBY)
+      class A
+        private something
+
+        def bar
+        end
+      end
+    RUBY
+  end
+
 
   it 'considers singleton class too' do
     expect_offense(<<~RUBY)
