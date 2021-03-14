@@ -416,7 +416,7 @@ RSpec.describe RuboCop::Cop::Layout::ClassStructure, :config do
   end
 
   context 'when defs modifier is used' do
-    pending 'registers an offense for public class methods after private class methods' do
+    it 'registers an offense for public class methods after private class methods' do
       expect_offense(<<~RUBY)
         class A
           private_class_method def self.foo

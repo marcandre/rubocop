@@ -235,6 +235,15 @@ module RuboCop
           'methods'
         end
 
+        VISIBILITY_CLASS = {
+          public: { visibility: :public, category: 'methods' }.freeze,
+          protected: { visibility: :protected, category: 'methods' }.freeze,
+          private: { visibility: :private, category: 'methods' }.freeze,
+          public_class_method: { visibility: :public, category: 'class_methods' }.freeze,
+          private_class_method: { visibility: :private, category: 'class_methods' }.freeze,
+        }.freeze
+        private_constant :VISIBILITY_CLASS
+
         # Categorize a node according to the {expected_order}
         # Try to match {categories} values against the node's method_name given
         # also its visibility.
@@ -242,10 +251,10 @@ module RuboCop
         # @return [String] with the key category or the `method_name` as string
         def classify_macro(node)
           name = node.method_name
-          return { visibility: name, category: 'methods' } if node.def_modifier?
+          return VISIBILITY_CLASS[node.method_name]&.dup ||  { category: 'methods' } if node.def_modifier?
 
           case name
-          when :public, :protected, :private
+          when :public, :protected, :private, :public_class_method, :private_class_method
             classify_visibility_macro(node)
           when :private_constant
             affected_nodes = set_visibility(:private, node.arguments)
@@ -258,7 +267,7 @@ module RuboCop
           arg, = args
           return unless args.size == 1 && arg.send_type? && !arg.receiver
 
-          { visibility: node.method_name, category: macro_name_to_category(arg.method_name) }
+          VISIBILITY_CLASS.merge(category: macro_name_to_category(arg.method_name))
         end
 
         # @return [Array<Node>] affected nodes
